@@ -1,0 +1,148 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; }
+    a { color: #0B3D66; } a:hover { color: #7651D8; }
+  </style>
+</helmet>
+<div style="width: 560px; height: 620px; box-sizing: border-box; padding: 30px 32px; background: #F6F6F7; display: flex; flex-direction: column; gap: 14px;">
+
+  <div style="font-size: 11px; font-weight: 700; letter-spacing: 0.08em; color: #8A94A6;">OPTION E &middot; VERTICAL SIDE RAIL</div>
+
+  <div style="flex-grow: 1; background: #FFFFFF; border: 1px solid #E7EBEF; border-radius: 14px; box-shadow: 0 1px 2px rgba(23, 32, 51, 0.05); overflow: hidden; display: flex;">
+
+    <div style="width: 252px; flex-shrink: 0; box-sizing: border-box; padding: 22px 18px; background: #FBFCFD; border-right: 1px solid #E7EBEF; display: flex; flex-direction: column; gap: 20px;">
+
+      <div style="display: flex; align-items: center; gap: 13px;">
+        <div style="position: relative; width: 52px; height: 52px; flex-shrink: 0;">
+          <svg width="52" height="52" viewBox="0 0 52 52">
+            <circle cx="26" cy="26" r="22" fill="none" stroke="#EEF1F4" stroke-width="5"></circle>
+            <circle cx="26" cy="26" r="22" fill="none" stroke="#7651D8" stroke-width="5" stroke-linecap="round" stroke-dasharray="{{ ringDash }}" transform="rotate(-90 26 26)"></circle>
+          </svg>
+          <div style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: #0B3D66;">{{ current }}/6</div>
+        </div>
+
+        <div>
+          <div style="font-size: 14px; font-weight: 600; color: #172033;">Create campaign</div>
+          <div style="margin-top: 3px; font-size: 12px; color: #7651D8; font-weight: 600;">{{ currentName }}</div>
+        </div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 4px;">
+        <sc-for list="{{ steps }}" as="item" hint-placeholder-count="6">
+          <div style="{{ item.rowStyle }}">
+            <div style="{{ item.accentStyle }}"></div>
+
+            <div style="{{ item.badgeStyle }}">
+              <sc-if value="{{ item.done }}" hint-placeholder-val="{{ false }}">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
+              </sc-if>
+              <sc-if value="{{ item.pending }}" hint-placeholder-val="{{ true }}">
+                <span style="{{ item.numberStyle }}">{{ item.number }}</span>
+              </sc-if>
+            </div>
+
+            <span style="{{ item.labelStyle }}">{{ item.name }}</span>
+          </div>
+        </sc-for>
+      </div>
+
+    </div>
+
+    <div style="flex-grow: 1; box-sizing: border-box; padding: 26px 24px; display: flex; flex-direction: column; gap: 14px;">
+      <div style="font-size: 11px; font-weight: 700; letter-spacing: 0.08em; color: #7651D8;">STEP {{ current }} &middot; {{ currentNameUpper }}</div>
+
+      <div style="font-size: 22px; font-weight: 600; color: #172033; line-height: 1.25;">{{ currentHeading }}</div>
+
+      <div style="display: flex; flex-direction: column; gap: 9px; margin-top: 4px;">
+        <div style="height: 40px; border: 1px solid #DCE3EA; border-radius: 8px; background: #FFFFFF;"></div>
+        <div style="height: 40px; border: 1px solid #DCE3EA; border-radius: 8px; background: #FFFFFF;"></div>
+        <div style="height: 76px; border: 1px solid #DCE3EA; border-radius: 8px; background: #FFFFFF;"></div>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+</x-dc>
+<script data-dc-script data-props='{"step":{"editor":"range","default":3,"min":1,"max":6,"step":1,"section":"State"}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const current = this.props.step ?? 3;
+    const names = ["Details", "Audience", "Popup", "Trigger", "Reward", "Review"];
+    const headings = [
+      "Name your campaign",
+      "Who should see it?",
+      "Choose your popup",
+      "When should it appear?",
+      "Add a reward",
+      "Review and publish",
+    ];
+
+    const steps = names.map((name, index) => {
+      const number = index + 1;
+      const done = number < current;
+      const active = number === current;
+
+      const rowBase =
+        "position: relative; display: flex; align-items: center; gap: 10px; padding: 9px 11px 9px 13px; border-radius: 8px; overflow: hidden;";
+      const badgeBase =
+        "width: 21px; height: 21px; border-radius: 6px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;";
+
+      let rowStyle = rowBase + " background: transparent;";
+      let accentStyle = "position: absolute; left: 0; top: 6px; bottom: 6px; width: 3px; border-radius: 999px; background: transparent;";
+      let badgeStyle = badgeBase + " background: #EEF1F4;";
+      let numberStyle = "font-size: 10px; font-weight: 700; color: #7B8796;";
+      let labelStyle = "font-size: 13px; font-weight: 500; color: #7B8796;";
+
+      if (done) {
+        badgeStyle = badgeBase + " background: #0B3D66;";
+        labelStyle = "font-size: 13px; font-weight: 500; color: #6B7280;";
+      }
+
+      if (active) {
+        rowStyle = rowBase + " background: #F3F7FB;";
+        accentStyle = "position: absolute; left: 0; top: 6px; bottom: 6px; width: 3px; border-radius: 999px; background: #7651D8;";
+        badgeStyle = badgeBase + " background: linear-gradient(135deg, #0B3D66, #7651D8);";
+        numberStyle = "font-size: 10px; font-weight: 700; color: #FFFFFF;";
+        labelStyle = "font-size: 13px; font-weight: 700; color: #0B3D66; letter-spacing: -0.01em;";
+      }
+
+      return {
+        name,
+        number,
+        done,
+        pending: !done,
+        rowStyle,
+        accentStyle,
+        badgeStyle,
+        numberStyle,
+        labelStyle,
+      };
+    });
+
+    const circumference = 2 * Math.PI * 22;
+    const filled = (current / 6) * circumference;
+
+    return {
+      steps,
+      current,
+      currentName: names[current - 1],
+      currentNameUpper: names[current - 1].toUpperCase(),
+      currentHeading: headings[current - 1],
+      ringDash: filled.toFixed(1) + " " + circumference.toFixed(1),
+    };
+  }
+}
+</script>
+</body>
+</html>

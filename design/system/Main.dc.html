@@ -1,0 +1,171 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body { margin: 0; font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; }
+    a { color: #0B3D66; } a:hover { color: #7651D8; }
+    .tile { height: 54px; border-radius: 8px; display: flex; align-items: flex-end; padding: 6px; box-sizing: border-box; }
+    .tile span { font-size: 9px; font-weight: 600; letter-spacing: 0.01em; }
+    .ramp { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 6px; }
+    .rampName { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; color: #9AA6B4; text-transform: uppercase; margin-bottom: 8px; }
+    .step { font-size: 10px; font-weight: 600; color: #6B7785; margin-top: 5px; }
+    .card { background: #FFFFFF; border: 1px solid #E1E6EC; border-radius: 12px; padding: 22px; box-shadow: 0 1px 2px rgba(23,32,51,.05); }
+  </style>
+</helmet>
+
+<div style="width: 1120px; height: 940px; box-sizing: border-box; padding: 34px 36px; background: #F6F7F9; display: flex; flex-direction: column; gap: 20px;">
+
+  <div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 20px;">
+    <div>
+      <div style="font-size: 11px; font-weight: 700; letter-spacing: 0.08em; color: #6546D7; text-transform: uppercase;">MQ Design System &middot; 01</div>
+      <h1 style="margin: 8px 0 0; font-size: 30px; font-weight: 700; letter-spacing: -0.021em; color: #172033;">Palette &amp; typography</h1>
+      <p style="margin: 6px 0 0; font-size: 14px; line-height: 1.55; color: #6B7785;">Built from the navy and purple already in the app. The eleven duplicate greys collapse into one cool-neutral ramp.</p>
+    </div>
+    <div style="text-align: right; flex-shrink: 0;">
+      <div style="font-size: 11px; font-weight: 700; letter-spacing: 0.08em; color: #9AA6B4; text-transform: uppercase;">Typeface</div>
+      <div style="margin-top: 6px; font-size: 20px; font-weight: 600; letter-spacing: -0.014em; color: #172033;">Inter</div>
+      <div style="margin-top: 2px; font-size: 12px; color: #6B7785;">Already served by Shopify's CDN</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div style="display: flex; flex-direction: column; gap: 20px;">
+
+      <div>
+        <div class="rampName">Primary &middot; navy</div>
+        <div class="ramp">
+          <div><div class="tile" style="background: #F2F7FB; border: 1px solid #E1E6EC;"><span style="color: #4F5B6B;">F2F7FB</span></div><div class="step">50</div></div>
+          <div><div class="tile" style="background: #E3EDF6;"><span style="color: #4F5B6B;">E3EDF6</span></div><div class="step">100</div></div>
+          <div><div class="tile" style="background: #C3D9EA;"><span style="color: #374151;">C3D9EA</span></div><div class="step">200</div></div>
+          <div><div class="tile" style="background: #93BAD7;"><span style="color: #232D3B;">93BAD7</span></div><div class="step">300</div></div>
+          <div><div class="tile" style="background: #4E8CBC;"><span style="color: #FFFFFF;">4E8CBC</span></div><div class="step">400</div></div>
+          <div><div class="tile" style="background: #0F4D80;"><span style="color: #FFFFFF;">0F4D80</span></div><div class="step">500 &middot; hover</div></div>
+          <div><div class="tile" style="background: #0B3D66; box-shadow: 0 0 0 2px #7651D8;"><span style="color: #FFFFFF;">0B3D66</span></div><div class="step">600 &middot; base</div></div>
+          <div><div class="tile" style="background: #082D4C;"><span style="color: #FFFFFF;">082D4C</span></div><div class="step">700</div></div>
+          <div><div class="tile" style="background: #061F35;"><span style="color: #FFFFFF;">061F35</span></div><div class="step">800</div></div>
+          <div><div class="tile" style="background: #04141F;"><span style="color: #FFFFFF;">04141F</span></div><div class="step">900</div></div>
+        </div>
+      </div>
+
+      <div>
+        <div class="rampName">Accent &middot; purple</div>
+        <div class="ramp">
+          <div><div class="tile" style="background: #F4F0FE; border: 1px solid #E6DDFC;"><span style="color: #5335B0;">F4F0FE</span></div><div class="step">50</div></div>
+          <div><div class="tile" style="background: #E6DDFC;"><span style="color: #5335B0;">E6DDFC</span></div><div class="step">100</div></div>
+          <div><div class="tile" style="background: #CFC0F8;"><span style="color: #3F2887;">CFC0F8</span></div><div class="step">200</div></div>
+          <div><div class="tile" style="background: #B39BF1;"><span style="color: #FFFFFF;">B39BF1</span></div><div class="step">300</div></div>
+          <div><div class="tile" style="background: #9576E6;"><span style="color: #FFFFFF;">9576E6</span></div><div class="step">400</div></div>
+          <div><div class="tile" style="background: #7651D8; box-shadow: 0 0 0 2px #0B3D66;"><span style="color: #FFFFFF;">7651D8</span></div><div class="step">500 &middot; base</div></div>
+          <div><div class="tile" style="background: #6546D7;"><span style="color: #FFFFFF;">6546D7</span></div><div class="step">600</div></div>
+          <div><div class="tile" style="background: #5335B0;"><span style="color: #FFFFFF;">5335B0</span></div><div class="step">700</div></div>
+          <div><div class="tile" style="background: #3F2887;"><span style="color: #FFFFFF;">3F2887</span></div><div class="step">800</div></div>
+          <div></div>
+        </div>
+      </div>
+
+      <div>
+        <div class="rampName">Neutral &middot; replaces 11 duplicate greys</div>
+        <div class="ramp">
+          <div><div class="tile" style="background: #FFFFFF; border: 1px solid #E1E6EC;"><span style="color: #4F5B6B;">FFFFFF</span></div><div class="step">0</div></div>
+          <div><div class="tile" style="background: #FAFBFC; border: 1px solid #E1E6EC;"><span style="color: #4F5B6B;">FAFBFC</span></div><div class="step">25</div></div>
+          <div><div class="tile" style="background: #F6F7F9; border: 1px solid #E1E6EC;"><span style="color: #4F5B6B;">F6F7F9</span></div><div class="step">50</div></div>
+          <div><div class="tile" style="background: #EEF1F4;"><span style="color: #4F5B6B;">EEF1F4</span></div><div class="step">100</div></div>
+          <div><div class="tile" style="background: #E1E6EC;"><span style="color: #374151;">E1E6EC</span></div><div class="step">200 &middot; border</div></div>
+          <div><div class="tile" style="background: #CBD3DC;"><span style="color: #232D3B;">CBD3DC</span></div><div class="step">300</div></div>
+          <div><div class="tile" style="background: #9AA6B4;"><span style="color: #FFFFFF;">9AA6B4</span></div><div class="step">400</div></div>
+          <div><div class="tile" style="background: #6B7785;"><span style="color: #FFFFFF;">6B7785</span></div><div class="step">500 &middot; muted</div></div>
+          <div><div class="tile" style="background: #374151;"><span style="color: #FFFFFF;">374151</span></div><div class="step">700 &middot; body</div></div>
+          <div><div class="tile" style="background: #172033;"><span style="color: #FFFFFF;">172033</span></div><div class="step">900 &middot; ink</div></div>
+        </div>
+      </div>
+
+      <div>
+        <div class="rampName">Status</div>
+        <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px;">
+          <div>
+            <div style="display: flex; gap: 6px;">
+              <div class="tile" style="background: #E7F7EF; flex-grow: 1;"><span style="color: #157A50;">E7F7EF</span></div>
+              <div class="tile" style="background: #1FAF6E; flex-grow: 1;"><span style="color: #FFFFFF;">1FAF6E</span></div>
+              <div class="tile" style="background: #157A50; flex-grow: 1;"><span style="color: #FFFFFF;">157A50</span></div>
+            </div>
+            <div class="step">Success &middot; surface / solid / text</div>
+          </div>
+          <div>
+            <div style="display: flex; gap: 6px;">
+              <div class="tile" style="background: #FFF8E8; flex-grow: 1;"><span style="color: #B4780A;">FFF8E8</span></div>
+              <div class="tile" style="background: #E0A722; flex-grow: 1;"><span style="color: #FFFFFF;">E0A722</span></div>
+              <div class="tile" style="background: #B4780A; flex-grow: 1;"><span style="color: #FFFFFF;">B4780A</span></div>
+            </div>
+            <div class="step">Warning</div>
+          </div>
+          <div>
+            <div style="display: flex; gap: 6px;">
+              <div class="tile" style="background: #FEF3F2; flex-grow: 1;"><span style="color: #C62828;">FEF3F2</span></div>
+              <div class="tile" style="background: #E0574F; flex-grow: 1;"><span style="color: #FFFFFF;">E0574F</span></div>
+              <div class="tile" style="background: #C62828; flex-grow: 1;"><span style="color: #FFFFFF;">C62828</span></div>
+            </div>
+            <div class="step">Danger</div>
+          </div>
+          <div>
+            <div style="display: flex; gap: 6px;">
+              <div class="tile" style="background: #EDF5FF; flex-grow: 1;"><span style="color: #0F5FD1;">EDF5FF</span></div>
+              <div class="tile" style="background: #1677FF; flex-grow: 1;"><span style="color: #FFFFFF;">1677FF</span></div>
+              <div class="tile" style="background: #0F5FD1; flex-grow: 1;"><span style="color: #FFFFFF;">0F5FD1</span></div>
+            </div>
+            <div class="step">Info</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="card" style="flex-grow: 1;">
+    <div class="rampName" style="margin-bottom: 14px;">Type scale &middot; Inter</div>
+
+    <div style="display: grid; grid-template-columns: 1fr 168px; gap: 12px 20px; align-items: baseline;">
+      <div style="font-size: 30px; font-weight: 700; letter-spacing: -0.021em; color: #172033;">Capture more signups</div>
+      <div style="font-size: 11px; color: #9AA6B4;">display &middot; 30/1.2 &middot; 700 &middot; -0.021em</div>
+
+      <div style="font-size: 24px; font-weight: 700; letter-spacing: -0.018em; color: #172033;">Name your campaign</div>
+      <div style="font-size: 11px; color: #9AA6B4;">h1 &middot; 24/1.25 &middot; 700 &middot; -0.018em</div>
+
+      <div style="font-size: 20px; font-weight: 600; letter-spacing: -0.014em; color: #172033;">Where should it appear?</div>
+      <div style="font-size: 11px; color: #9AA6B4;">h2 &middot; 20/1.3 &middot; 600</div>
+
+      <div style="font-size: 16px; font-weight: 600; letter-spacing: -0.008em; color: #172033;">Your campaigns</div>
+      <div style="font-size: 11px; color: #9AA6B4;">h3 &middot; 16/1.4 &middot; 600</div>
+
+      <div style="font-size: 14px; font-weight: 600; letter-spacing: -0.004em; color: #172033;">Exit-intent cart saver</div>
+      <div style="font-size: 11px; color: #9AA6B4;">h4 &middot; 14/1.45 &middot; 600</div>
+
+      <div style="font-size: 14px; line-height: 1.55; color: #374151;">Only live popups can be attached to a campaign.</div>
+      <div style="font-size: 11px; color: #9AA6B4;">bodyLg &middot; 14/1.55 &middot; 400</div>
+
+      <div style="font-size: 13px; line-height: 1.55; color: #374151;">Choose when visitors should see the campaign.</div>
+      <div style="font-size: 11px; color: #9AA6B4;">body &middot; 13/1.55 &middot; 400</div>
+
+      <div style="font-size: 12px; line-height: 1.5; color: #6B7785;">Between 3 and 60 characters.</div>
+      <div style="font-size: 11px; color: #9AA6B4;">bodySm &middot; 12/1.5 &middot; 400</div>
+
+      <div style="font-size: 12px; font-weight: 600; color: #374151;">Campaign name</div>
+      <div style="font-size: 11px; color: #9AA6B4;">label &middot; 12/1.4 &middot; 600</div>
+
+      <div style="font-size: 11px; font-weight: 500; color: #6B7785;">2 steps &middot; priority 1</div>
+      <div style="font-size: 11px; color: #9AA6B4;">caption &middot; 11/1.4 &middot; 500</div>
+
+      <div style="font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #6546D7;">Step 4 &middot; Trigger</div>
+      <div style="font-size: 11px; color: #9AA6B4;">eyebrow &middot; 11 &middot; 700 &middot; 0.08em</div>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>

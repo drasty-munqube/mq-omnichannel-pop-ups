@@ -1,0 +1,118 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; }
+    a { color: #0B3D66; } a:hover { color: #7651D8; }
+  </style>
+</helmet>
+<div style="width: 940px; height: 300px; box-sizing: border-box; padding: 30px 32px; background: #F6F6F7; display: flex; flex-direction: column; gap: 14px;">
+
+  <div style="font-size: 11px; font-weight: 700; letter-spacing: 0.08em; color: #8A94A6;">OPTION C &middot; UNDERLINE TABS + PROGRESS RAIL</div>
+
+  <div style="background: #FFFFFF; border: 1px solid #E7EBEF; border-radius: 14px; box-shadow: 0 1px 2px rgba(23, 32, 51, 0.05); overflow: hidden;">
+
+    <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 24px 0;">
+      <span style="font-size: 15px; font-weight: 600; color: #172033;">Create campaign</span>
+      <span style="font-size: 12px; color: #9AA4B2;">{{ remainingLabel }}</span>
+    </div>
+
+    <div style="display: flex; align-items: flex-end; gap: 26px; padding: 16px 24px 0;">
+      <sc-for list="{{ steps }}" as="item" hint-placeholder-count="6">
+        <div style="display: flex; flex-direction: column; gap: 11px;">
+          <div style="display: flex; align-items: center; gap: 7px;">
+            <div style="{{ item.chipStyle }}">
+              <sc-if value="{{ item.done }}" hint-placeholder-val="{{ false }}">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#6546D7" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
+              </sc-if>
+              <sc-if value="{{ item.pending }}" hint-placeholder-val="{{ true }}">
+                <span style="{{ item.numberStyle }}">{{ item.number }}</span>
+              </sc-if>
+            </div>
+
+            <span style="{{ item.labelStyle }}">{{ item.name }}</span>
+          </div>
+
+          <div style="{{ item.underlineStyle }}"></div>
+        </div>
+      </sc-for>
+    </div>
+
+    <div style="height: 3px; background: #EEF1F4;">
+      <div style="{{ railStyle }}"></div>
+    </div>
+
+  </div>
+
+</div>
+</x-dc>
+<script data-dc-script data-props='{"step":{"editor":"range","default":3,"min":1,"max":6,"step":1,"section":"State"}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const current = this.props.step ?? 3;
+    const names = ["Details", "Audience", "Popup", "Trigger", "Reward", "Review"];
+
+    const steps = names.map((name, index) => {
+      const number = index + 1;
+      const done = number < current;
+      const active = number === current;
+
+      const chipBase =
+        "width: 19px; height: 19px; border-radius: 6px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;";
+
+      let chipStyle = chipBase + " background: #F1F3F6;";
+      let numberStyle = "font-size: 10px; font-weight: 700; color: #9AA4B2;";
+      let labelStyle = "font-size: 13px; font-weight: 500; color: #9AA4B2;";
+      let underlineStyle = "height: 2px; border-radius: 999px; background: transparent;";
+
+      if (done) {
+        chipStyle = chipBase + " background: #F0EAFE;";
+        labelStyle = "font-size: 13px; font-weight: 500; color: #6B7280;";
+      }
+
+      if (active) {
+        chipStyle = chipBase + " background: #7651D8;";
+        numberStyle = "font-size: 10px; font-weight: 700; color: #FFFFFF;";
+        labelStyle = "font-size: 13px; font-weight: 700; color: #172033; letter-spacing: -0.01em;";
+        underlineStyle = "height: 2px; border-radius: 999px; background: #7651D8;";
+      }
+
+      return {
+        name,
+        number,
+        done,
+        pending: !done,
+        chipStyle,
+        numberStyle,
+        labelStyle,
+        underlineStyle,
+      };
+    });
+
+    const percent = Math.round((current / 6) * 100);
+    const remaining = 6 - current;
+
+    return {
+      steps,
+      railStyle:
+        "height: 3px; width: " +
+        percent +
+        "%; background: linear-gradient(90deg, #0B3D66, #7651D8); border-radius: 0 999px 999px 0;",
+      remainingLabel:
+        remaining === 0
+          ? "Ready to publish"
+          : remaining + (remaining === 1 ? " step left" : " steps left"),
+    };
+  }
+}
+</script>
+</body>
+</html>

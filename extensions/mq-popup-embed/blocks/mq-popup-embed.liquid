@@ -1,0 +1,35 @@
+{%- comment -%}
+  App embed block. Merchants turn this on once, from
+  Online Store > Themes > Customize > App embeds — no manual
+  placement on any page needed. Renders a mount point the
+  bundled script attaches to.
+{%- endcomment -%}
+
+<div
+  id="mq-popup-root"
+  data-shop="{{ shop.permanent_domain }}"
+  data-page-type="{{ request.page_type }}"
+  data-page-handle="{{ page.handle | default: product.handle | default: collection.handle | default: blog.handle }}"
+  data-proxy-path="/apps/{{ block.settings.proxy_subpath }}"
+></div>
+
+<script
+  src="{{ 'mq-popup.js' | asset_url }}"
+  defer="defer"
+></script>
+
+{% schema %}
+{
+  "name": "MQ Popups",
+  "target": "body",
+  "settings": [
+    {
+      "type": "text",
+      "id": "proxy_subpath",
+      "label": "App proxy subpath",
+      "default": "mq-popups",
+      "info": "Must match the subpath configured for this app's proxy (Settings > Apps and sales channels)."
+    }
+  ]
+}
+{% endschema %}

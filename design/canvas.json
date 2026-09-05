@@ -1,0 +1,56 @@
+{
+  "artboards": [
+    {
+      "file": "Main.dc.html",
+      "title": "A · Segmented progress",
+      "x": 0,
+      "y": 0,
+      "w": 940,
+      "h": 300
+    },
+    {
+      "file": "CardBadges.dc.html",
+      "title": "B · Elevated step cards",
+      "x": 1060,
+      "y": 0,
+      "w": 940,
+      "h": 300
+    },
+    {
+      "file": "UnderlineRail.dc.html",
+      "title": "C · Underline tabs + rail",
+      "x": 0,
+      "y": 460,
+      "w": 940,
+      "h": 300
+    },
+    {
+      "file": "IconRail.dc.html",
+      "title": "D · Icon rail with glow",
+      "x": 1060,
+      "y": 460,
+      "w": 940,
+      "h": 300
+    },
+    {
+      "file": "VerticalSidebar.dc.html",
+      "title": "E · Vertical side rail",
+      "x": 0,
+      "y": 920,
+      "w": 560,
+      "h": 620
+    }
+  ],
+  "annotations": [
+    {
+      "id": "how-to-read",
+      "x": 700,
+      "y": 920,
+      "w": 460,
+      "text": "Every option has a Step slider above the frame (1-6) so you can watch the done / active / upcoming states change.\n\nAll five reuse the app's real tokens: navy #0B3D66, purple #7651D8, borders #DCE3EA / #E7EBEF, text #172033 / #6B7280."
+    }
+  ],
+  "launch": {
+    "view": "canvas"
+  }
+}

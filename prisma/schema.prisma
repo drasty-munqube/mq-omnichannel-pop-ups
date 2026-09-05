@@ -1,0 +1,75 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Session {
+  id                  String    @id
+  shop                String
+  state               String
+  isOnline             Boolean   @default(false)
+  scope               String?
+  expires              DateTime?
+  accessToken          String
+  userId              BigInt?
+  firstName            String?
+  lastName             String?
+  email                String?
+  accountOwner         Boolean   @default(false)
+  locale               String?
+  collaborator         Boolean?  @default(false)
+  emailVerified        Boolean?  @default(false)
+  refreshToken         String?
+  refreshTokenExpires  DateTime?
+}
+
+model Popup {
+  id        String   @id @default(cuid())
+  shop      String
+  name      String
+  status    String   @default("draft")
+  priority  Int      @default(1)
+  steps     Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Campaign {
+  id                   String   @id @default(cuid())
+  shop                 String
+  name                 String
+  description          String
+  type                 String   @default("targeted")
+  status               String   @default("draft")
+  audience             String
+  popupId              String?
+  trigger              String
+  triggerDelaySeconds  Int      @default(5)
+  triggerScrollPercent Int      @default(50)
+  pageTargetMode       String   @default("all")
+  pageTargets          Json
+  reward               String
+  rewardDiscountId     String?
+  rewardDiscountCode   String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+}
+
+model Contact {
+  id         String   @id @default(cuid())
+  shop       String
+  popupId    String?
+  popupName  String?
+  campaignId String?
+  email      String?
+  phone      String?
+  fields     Json
+  pageUrl    String?
+  createdAt  DateTime @default(now())
+
+  @@index([shop, createdAt])
+}

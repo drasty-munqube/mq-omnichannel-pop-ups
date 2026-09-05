@@ -1,0 +1,179 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body { margin: 0; font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; }
+    a { color: #0B3D66; } a:hover { color: #7651D8; }
+    .card { background: #FFFFFF; border: 1px solid #E1E6EC; border-radius: 12px; padding: 20px; box-shadow: 0 1px 2px rgba(23,32,51,.05); }
+    .rampName { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; color: #9AA6B4; text-transform: uppercase; margin-bottom: 12px; }
+    .btn { display: inline-flex; align-items: center; justify-content: center; height: 38px; padding: 0 16px; font-size: 13px; font-weight: 600; letter-spacing: -0.004em; border-radius: 8px; border: 1px solid transparent; cursor: pointer; }
+    .badge { display: inline-flex; align-items: center; padding: 2px 6px; border-radius: 6px; font-size: 10px; font-weight: 700; letter-spacing: 0.03em; }
+    .note { font-size: 11px; color: #9AA6B4; margin-top: 8px; }
+    .skel { border-radius: 6px; background: linear-gradient(90deg,#EEF1F4 0%,#F6F7F9 50%,#EEF1F4 100%); background-size: 200% 100%; animation: shimmer 1.4s linear infinite; }
+    @keyframes shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+    @media (prefers-reduced-motion: reduce) { .skel { animation: none; } }
+  </style>
+</helmet>
+
+<div style="width: 1120px; height: 940px; box-sizing: border-box; padding: 34px 36px; background: #F6F7F9; display: flex; flex-direction: column; gap: 18px;">
+
+  <div>
+    <div style="font-size: 11px; font-weight: 700; letter-spacing: 0.08em; color: #6546D7; text-transform: uppercase;">MQ Design System &middot; 02</div>
+    <h1 style="margin: 8px 0 0; font-size: 30px; font-weight: 700; letter-spacing: -0.021em; color: #172033;">Components &amp; motion</h1>
+  </div>
+
+  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 18px;">
+
+    <div class="card">
+      <div class="rampName">Buttons</div>
+      <div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center;">
+        <button class="btn" style="background: #0B3D66; color: #FFFFFF; box-shadow: 0 1px 2px rgba(23,32,51,.05);">Publish campaign</button>
+        <button class="btn" style="background: #FFFFFF; border-color: #CBD3DC; color: #0B3D66; box-shadow: 0 1px 2px rgba(23,32,51,.05);">Save as draft</button>
+        <button class="btn" style="background: #7651D8; color: #FFFFFF;">Draft with AI</button>
+        <button class="btn" style="background: transparent; color: #374151;">Cancel</button>
+        <button class="btn" style="background: #FEF3F2; border-color: #F0B9B9; color: #C62828;">Delete</button>
+        <button class="btn" style="background: #0B3D66; color: #FFFFFF; opacity: 0.55; cursor: not-allowed;">Disabled</button>
+      </div>
+      <div style="display: flex; gap: 10px; align-items: center; margin-top: 12px;">
+        <button class="btn" style="height: 32px; padding: 0 12px; font-size: 12px; background: #FFFFFF; border-color: #CBD3DC; color: #0B3D66;">Small 32</button>
+        <button class="btn" style="background: #FFFFFF; border-color: #CBD3DC; color: #0B3D66;">Medium 38</button>
+        <button class="btn" style="height: 44px; padding: 0 20px; font-size: 14px; background: #FFFFFF; border-color: #CBD3DC; color: #0B3D66;">Large 44</button>
+      </div>
+      <div class="note">Hover lifts 1px + shadow, press scales to 0.98, keyboard focus shows a purple ring. Heights standardised to 32 / 38 / 44 (were 34 / 38 / 40 / 44).</div>
+    </div>
+
+    <div class="card">
+      <div class="rampName">Inputs</div>
+      <div style="display: flex; flex-direction: column; gap: 14px;">
+        <div>
+          <label style="display: block; margin-bottom: 8px; font-size: 12px; font-weight: 600; color: #374151;">Campaign name</label>
+          <div style="height: 38px; border: 1px solid #E1E6EC; border-radius: 8px; background: #FFFFFF; display: flex; align-items: center; padding: 0 12px; font-size: 13px; color: #9AA6B4;">e.g. Diwali New Visitors</div>
+          <div style="margin-top: 6px; font-size: 12px; color: #6B7785;">Between 3 and 60 characters.</div>
+        </div>
+        <div>
+          <label style="display: block; margin-bottom: 8px; font-size: 12px; font-weight: 600; color: #374151;">Focused</label>
+          <div style="height: 38px; border: 1px solid #7651D8; border-radius: 8px; background: #FFFFFF; box-shadow: 0 0 0 3px rgba(118,81,216,.32); display: flex; align-items: center; padding: 0 12px; font-size: 13px; color: #172033;">Diwali New Visitors</div>
+        </div>
+        <div>
+          <label style="display: block; margin-bottom: 8px; font-size: 12px; font-weight: 600; color: #374151;">Invalid</label>
+          <div style="height: 38px; border: 1px solid #E0574F; border-radius: 8px; background: #FEF3F2; display: flex; align-items: center; padding: 0 12px; font-size: 13px; color: #172033;">Di</div>
+          <div style="margin-top: 6px; font-size: 12px; color: #C62828;">Campaign name must be at least 3 characters.</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div style="display: grid; grid-template-columns: 1.15fr 1fr; gap: 18px;">
+
+    <div class="card">
+      <div class="rampName">Table</div>
+      <div style="border: 1px solid #E1E6EC; border-radius: 12px; overflow: hidden;">
+        <div style="display: grid; grid-template-columns: 1.6fr 90px 100px 70px; gap: 12px; align-items: center; padding: 10px 16px; background: #F6F7F9; border-bottom: 1px solid #EEF1F4; font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #9AA6B4;">
+          <div>Campaign</div><div>Status</div><div>Trigger</div><div>Pages</div>
+        </div>
+        <div style="display: grid; grid-template-columns: 1.6fr 90px 100px 70px; gap: 12px; align-items: center; padding: 14px 16px; border-bottom: 1px solid #EEF1F4; background: #FFFFFF;">
+          <div>
+            <div style="font-size: 13px; font-weight: 600; color: #172033;">Diwali welcome offer</div>
+            <div style="font-size: 11px; color: #6B7785; margin-top: 2px;">New visitors &middot; DIWALI20</div>
+          </div>
+          <div><span class="badge" style="background: #E7F7EF; color: #157A50;">LIVE</span></div>
+          <div style="font-size: 12px; color: #374151;">After 5s</div>
+          <div style="font-size: 12px; color: #374151;">All</div>
+        </div>
+        <div style="display: grid; grid-template-columns: 1.6fr 90px 100px 70px; gap: 12px; align-items: center; padding: 14px 16px; border-bottom: 1px solid #EEF1F4; background: #FAFBFC;">
+          <div>
+            <div style="font-size: 13px; font-weight: 600; color: #172033;">Exit-intent cart saver</div>
+            <div style="font-size: 11px; color: #6B7785; margin-top: 2px;">Returning visitors</div>
+          </div>
+          <div><span class="badge" style="background: #EEF1F4; color: #6B7785;">DRAFT</span></div>
+          <div style="font-size: 12px; color: #374151;">Scroll 50%</div>
+          <div style="font-size: 12px; color: #374151;">3 pages</div>
+        </div>
+        <div style="display: grid; grid-template-columns: 1.6fr 90px 100px 70px; gap: 12px; align-items: center; padding: 14px 16px; background: #EEF5FB;">
+          <div>
+            <div style="font-size: 13px; font-weight: 600; color: #172033;">BFCM early access</div>
+            <div style="font-size: 11px; color: #6B7785; margin-top: 2px;">Selected row</div>
+          </div>
+          <div><span class="badge" style="background: #E7F7EF; color: #157A50;">LIVE</span></div>
+          <div style="font-size: 12px; color: #374151;">Immediately</div>
+          <div style="font-size: 12px; color: #374151;">Home</div>
+        </div>
+      </div>
+      <div class="note">Row hover washes to neutral-25 without lifting, so tables stay calm. Selected rows use navy-50.</div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 18px;">
+
+      <div class="card">
+        <div class="rampName">Badges</div>
+        <div style="display: flex; flex-wrap: wrap; gap: 7px;">
+          <span class="badge" style="background: #EEF1F4; color: #6B7785;">NEUTRAL</span>
+          <span class="badge" style="background: #E7F7EF; color: #157A50;">LIVE</span>
+          <span class="badge" style="background: #FFF8E8; color: #B4780A;">SCHEDULED</span>
+          <span class="badge" style="background: #FEF3F2; color: #C62828;">FAILED</span>
+          <span class="badge" style="background: #EDF5FF; color: #0F5FD1;">INFO</span>
+          <span class="badge" style="background: #F4F0FE; color: #6546D7;">&#10022; TESTS</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="rampName">Radius &amp; shadow</div>
+        <div style="display: flex; gap: 10px; align-items: flex-end;">
+          <div style="text-align: center;"><div style="width: 54px; height: 40px; background: #FFFFFF; border: 1px solid #E1E6EC; border-radius: 6px; box-shadow: 0 1px 2px rgba(23,32,51,.05);"></div><div class="note" style="margin-top: 5px;">sm 6 &middot; xs</div></div>
+          <div style="text-align: center;"><div style="width: 54px; height: 40px; background: #FFFFFF; border: 1px solid #E1E6EC; border-radius: 8px; box-shadow: 0 1px 3px rgba(23,32,51,.07), 0 1px 2px rgba(23,32,51,.04);"></div><div class="note" style="margin-top: 5px;">md 8 &middot; sm</div></div>
+          <div style="text-align: center;"><div style="width: 54px; height: 40px; background: #FFFFFF; border: 1px solid #E1E6EC; border-radius: 12px; box-shadow: 0 4px 12px rgba(23,32,51,.08), 0 1px 3px rgba(23,32,51,.05);"></div><div class="note" style="margin-top: 5px;">lg 12 &middot; md</div></div>
+          <div style="text-align: center;"><div style="width: 54px; height: 40px; background: #FFFFFF; border: 1px solid #E1E6EC; border-radius: 16px; box-shadow: 0 12px 28px rgba(23,32,51,.12), 0 4px 8px rgba(23,32,51,.06);"></div><div class="note" style="margin-top: 5px;">xl 16 &middot; lg</div></div>
+          <div style="text-align: center;"><div style="width: 54px; height: 40px; background: #FFFFFF; border: 1px solid #E1E6EC; border-radius: 999px; box-shadow: 0 24px 56px rgba(23,32,51,.18), 0 8px 16px rgba(23,32,51,.08);"></div><div class="note" style="margin-top: 5px;">pill &middot; xl</div></div>
+        </div>
+      </div>
+
+      <div class="card" style="flex-grow: 1;">
+        <div class="rampName">Skeleton loader</div>
+        <div style="display: flex; gap: 12px; align-items: center;">
+          <div class="skel" style="width: 40px; height: 40px; border-radius: 50%;"></div>
+          <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 8px;">
+            <div class="skel" style="height: 11px; width: 62%;"></div>
+            <div class="skel" style="height: 11px; width: 40%;"></div>
+          </div>
+        </div>
+        <div class="note">Replaces plain spinners wherever loader data lands.</div>
+      </div>
+
+    </div>
+
+  </div>
+
+  <div class="card">
+    <div class="rampName">Motion tokens</div>
+    <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px;">
+      <div>
+        <div style="font-size: 13px; font-weight: 600; color: #172033;">150ms &middot; fast</div>
+        <div class="note">Press feedback, hover transforms</div>
+      </div>
+      <div>
+        <div style="font-size: 13px; font-weight: 600; color: #172033;">200ms &middot; base</div>
+        <div class="note">Colour, shadow, dropdowns</div>
+      </div>
+      <div>
+        <div style="font-size: 13px; font-weight: 600; color: #172033;">300ms &middot; slow</div>
+        <div class="note">Modals, page and step transitions</div>
+      </div>
+      <div>
+        <div style="font-size: 13px; font-weight: 600; color: #172033;">400ms &middot; slower</div>
+        <div class="note">Scroll reveal only</div>
+      </div>
+    </div>
+    <div class="note" style="margin-top: 12px;">Easing: out <strong style="color:#374151;">cubic-bezier(.16,1,.3,1)</strong> for entrances &middot; standard <strong style="color:#374151;">cubic-bezier(.2,0,0,1)</strong> for state changes &middot; spring <strong style="color:#374151;">cubic-bezier(.34,1.4,.64,1)</strong> for pops. Transform and opacity only. Everything disables under prefers-reduced-motion.</div>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>

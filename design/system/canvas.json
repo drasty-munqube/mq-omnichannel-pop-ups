@@ -1,0 +1,23 @@
+{
+  "artboards": [
+    {
+      "file": "Main.dc.html",
+      "title": "01 · Palette & typography",
+      "x": 0,
+      "y": 0,
+      "w": 1120,
+      "h": 940
+    },
+    {
+      "file": "Components.dc.html",
+      "title": "02 · Components & motion",
+      "x": 1240,
+      "y": 0,
+      "w": 1120,
+      "h": 940
+    }
+  ],
+  "launch": {
+    "view": "canvas"
+  }
+}

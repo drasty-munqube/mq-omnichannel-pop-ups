@@ -1,0 +1,159 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; }
+    a { color: #0B3D66; } a:hover { color: #7651D8; }
+  </style>
+</helmet>
+<div style="width: 940px; height: 300px; box-sizing: border-box; padding: 30px 32px; background: #F6F6F7; display: flex; flex-direction: column; gap: 14px;">
+
+  <div style="font-size: 11px; font-weight: 700; letter-spacing: 0.08em; color: #8A94A6;">OPTION D &middot; ICON RAIL WITH FOCUS GLOW</div>
+
+  <div style="background: #FFFFFF; border: 1px solid #E7EBEF; border-radius: 14px; box-shadow: 0 1px 2px rgba(23, 32, 51, 0.05); overflow: hidden;">
+
+    <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 24px 0;">
+      <span style="font-size: 15px; font-weight: 600; color: #172033;">Create campaign</span>
+      <span style="font-size: 12px; color: #9AA4B2;">Step {{ current }} of 6</span>
+    </div>
+
+    <div style="display: flex; align-items: flex-start; padding: 22px 28px 24px;">
+      <sc-for list="{{ steps }}" as="item" hint-placeholder-count="6">
+        <div style="display: flex; align-items: flex-start; flex-grow: 1;">
+
+          <div style="display: flex; flex-direction: column; align-items: center; gap: 10px; width: 76px; flex-shrink: 0;">
+            <div style="{{ item.circleStyle }}">
+              <sc-if value="{{ item.isDetails }}" hint-placeholder-val="{{ true }}">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="{{ item.iconColor }}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 20h9"></path>
+                  <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"></path>
+                </svg>
+              </sc-if>
+
+              <sc-if value="{{ item.isAudience }}" hint-placeholder-val="{{ false }}">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="{{ item.iconColor }}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
+                  <circle cx="9" cy="7" r="4"></circle>
+                  <path d="M22 21v-2a4 4 0 0 0-3-3.87"></path>
+                  <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                </svg>
+              </sc-if>
+
+              <sc-if value="{{ item.isPopup }}" hint-placeholder-val="{{ false }}">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="{{ item.iconColor }}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="3" y="4" width="18" height="15" rx="2"></rect>
+                  <path d="M3 9h18"></path>
+                  <path d="M8 14h6"></path>
+                </svg>
+              </sc-if>
+
+              <sc-if value="{{ item.isTrigger }}" hint-placeholder-val="{{ false }}">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="{{ item.iconColor }}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M13 2 4 14h7l-1 8 9-12h-7l1-8Z"></path>
+                </svg>
+              </sc-if>
+
+              <sc-if value="{{ item.isReward }}" hint-placeholder-val="{{ false }}">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="{{ item.iconColor }}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0l-7.2-7.2A2 2 0 0 1 3 12V4a1 1 0 0 1 1-1h8a2 2 0 0 1 1.4.6l7.2 7.2a2 2 0 0 1 0 2.6Z"></path>
+                  <circle cx="7.5" cy="7.5" r="1.3"></circle>
+                </svg>
+              </sc-if>
+
+              <sc-if value="{{ item.isReview }}" hint-placeholder-val="{{ false }}">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="{{ item.iconColor }}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M9 11l3 3 8-8"></path>
+                  <path d="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9"></path>
+                </svg>
+              </sc-if>
+            </div>
+
+            <span style="{{ item.labelStyle }}">{{ item.name }}</span>
+          </div>
+
+          <sc-if value="{{ item.hasConnector }}" hint-placeholder-val="{{ true }}">
+            <div style="{{ item.connectorStyle }}"></div>
+          </sc-if>
+
+        </div>
+      </sc-for>
+    </div>
+
+  </div>
+
+</div>
+</x-dc>
+<script data-dc-script data-props='{"step":{"editor":"range","default":3,"min":1,"max":6,"step":1,"section":"State"}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const current = this.props.step ?? 3;
+    const names = ["Details", "Audience", "Popup", "Trigger", "Reward", "Review"];
+
+    const steps = names.map((name, index) => {
+      const number = index + 1;
+      const done = number < current;
+      const active = number === current;
+
+      const circleBase =
+        "width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; box-sizing: border-box;";
+
+      let circleStyle =
+        circleBase + " background: #F6F6F7; border: 1px solid #DCE3EA;";
+      let iconColor = "#9AA4B2";
+      let labelStyle =
+        "font-size: 11px; font-weight: 500; color: #9AA4B2; text-align: center;";
+
+      if (done) {
+        circleStyle = circleBase + " background: #0B3D66;";
+        iconColor = "#FFFFFF";
+        labelStyle =
+          "font-size: 11px; font-weight: 500; color: #6B7280; text-align: center;";
+      }
+
+      if (active) {
+        circleStyle =
+          circleBase +
+          " background: #FFFFFF; border: 2px solid #7651D8; box-shadow: 0 0 0 5px rgba(118, 81, 216, 0.13), 0 6px 16px rgba(11, 61, 102, 0.16);";
+        iconColor = "#7651D8";
+        labelStyle =
+          "font-size: 11px; font-weight: 700; color: #0B3D66; text-align: center; letter-spacing: -0.01em;";
+      }
+
+      let connectorStyle =
+        "flex-grow: 1; height: 2px; margin-top: 18px; border-radius: 999px; background: #E5E9EE;";
+
+      if (done) {
+        connectorStyle =
+          number + 1 === current
+            ? "flex-grow: 1; height: 2px; margin-top: 18px; border-radius: 999px; background: linear-gradient(90deg, #0B3D66, #7651D8);"
+            : "flex-grow: 1; height: 2px; margin-top: 18px; border-radius: 999px; background: #0B3D66;";
+      }
+
+      return {
+        name,
+        circleStyle,
+        iconColor,
+        labelStyle,
+        connectorStyle,
+        hasConnector: number < 6,
+        isDetails: number === 1,
+        isAudience: number === 2,
+        isPopup: number === 3,
+        isTrigger: number === 4,
+        isReward: number === 5,
+        isReview: number === 6,
+      };
+    });
+
+    return { steps, current };
+  }
+}
+</script>
+</body>
+</html>

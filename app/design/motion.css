@@ -1,0 +1,365 @@
+/* ============================================================
+   MQ MOTION + INTERACTION LAYER
+
+   Zero dependencies. Everything here animates only transform
+   and opacity so it stays on the compositor at 60fps.
+
+   Nothing in this file applies until an element opts in with a
+   `data-mq` attribute or an `mq-*` class, so adding the sheet
+   changes nothing visually on its own.
+
+   Durations 150-400ms, natural easing, and the whole layer is
+   disabled under prefers-reduced-motion (bottom of file).
+   ============================================================ */
+
+:root {
+  --mq-dur-fast: 150ms;
+  --mq-dur-base: 200ms;
+  --mq-dur-slow: 300ms;
+  --mq-dur-slower: 400ms;
+
+  --mq-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --mq-ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --mq-ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --mq-ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
+
+  --mq-focus-ring: 0 0 0 3px rgba(118, 81, 216, 0.32);
+}
+
+/* ------------------------------------------------------------
+   KEYFRAMES
+------------------------------------------------------------ */
+
+@keyframes mq-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes mq-fade-in-up {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 8px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes mq-scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes mq-slide-in-right {
+  from {
+    opacity: 0;
+    transform: translate3d(16px, 0, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes mq-slide-in-up {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 16px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes mq-pop {
+  0% {
+    transform: scale(0.9);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.03);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes mq-shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+@keyframes mq-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ------------------------------------------------------------
+   ENTRANCE UTILITIES
+------------------------------------------------------------ */
+
+.mq-enter {
+  animation: mq-fade-in-up var(--mq-dur-slow) var(--mq-ease-out) both;
+}
+
+.mq-enter-fade {
+  animation: mq-fade-in var(--mq-dur-base) var(--mq-ease-out) both;
+}
+
+.mq-enter-scale {
+  animation: mq-scale-in var(--mq-dur-base) var(--mq-ease-out) both;
+}
+
+.mq-enter-pop {
+  animation: mq-pop var(--mq-dur-slow) var(--mq-ease-spring) both;
+}
+
+/* Route / step transitions — keyed on a changing React key */
+.mq-page {
+  animation: mq-fade-in-up var(--mq-dur-slow) var(--mq-ease-out) both;
+}
+
+.mq-panel-right {
+  animation: mq-slide-in-right var(--mq-dur-slow) var(--mq-ease-out) both;
+}
+
+/* ------------------------------------------------------------
+   STAGGER
+
+   Put `data-mq-stagger` on a list container; children animate in
+   sequence. Caps at 12 so a long list never feels sluggish.
+------------------------------------------------------------ */
+
+[data-mq-stagger] > * {
+  animation: mq-fade-in-up var(--mq-dur-slow) var(--mq-ease-out) both;
+}
+
+[data-mq-stagger] > *:nth-child(1) { animation-delay: 20ms; }
+[data-mq-stagger] > *:nth-child(2) { animation-delay: 50ms; }
+[data-mq-stagger] > *:nth-child(3) { animation-delay: 80ms; }
+[data-mq-stagger] > *:nth-child(4) { animation-delay: 110ms; }
+[data-mq-stagger] > *:nth-child(5) { animation-delay: 140ms; }
+[data-mq-stagger] > *:nth-child(6) { animation-delay: 170ms; }
+[data-mq-stagger] > *:nth-child(7) { animation-delay: 200ms; }
+[data-mq-stagger] > *:nth-child(8) { animation-delay: 230ms; }
+[data-mq-stagger] > *:nth-child(9) { animation-delay: 250ms; }
+[data-mq-stagger] > *:nth-child(10) { animation-delay: 270ms; }
+[data-mq-stagger] > *:nth-child(n + 11) { animation-delay: 290ms; }
+
+/* ------------------------------------------------------------
+   SCROLL REVEAL
+
+   Elements start hidden and reveal when an IntersectionObserver
+   adds `data-mq-visible` (see useScrollReveal). Without JS the
+   `:not([data-mq-reveal-armed])` guard keeps content visible, so
+   nothing is ever stuck invisible.
+------------------------------------------------------------ */
+
+[data-mq-reveal][data-mq-reveal-armed] {
+  opacity: 0;
+  transform: translate3d(0, 14px, 0);
+  transition:
+    opacity var(--mq-dur-slower) var(--mq-ease-out),
+    transform var(--mq-dur-slower) var(--mq-ease-out);
+  will-change: opacity, transform;
+}
+
+[data-mq-reveal][data-mq-visible] {
+  opacity: 1;
+  transform: translate3d(0, 0, 0);
+}
+
+/* ------------------------------------------------------------
+   INTERACTION STATES
+
+   `data-mq="interactive"` — hover lift + press feedback.
+   `data-mq="pressable"`   — press feedback only (rows, chips).
+------------------------------------------------------------ */
+
+[data-mq="interactive"] {
+  transition:
+    transform var(--mq-dur-fast) var(--mq-ease-standard),
+    box-shadow var(--mq-dur-base) var(--mq-ease-standard),
+    background-color var(--mq-dur-base) var(--mq-ease-standard),
+    border-color var(--mq-dur-base) var(--mq-ease-standard),
+    color var(--mq-dur-base) var(--mq-ease-standard),
+    opacity var(--mq-dur-base) var(--mq-ease-standard);
+}
+
+[data-mq="interactive"]:hover:not(:disabled):not([aria-disabled="true"]) {
+  transform: translate3d(0, -1px, 0);
+  box-shadow: 0 6px 16px rgba(23, 32, 51, 0.12);
+}
+
+[data-mq="interactive"]:active:not(:disabled):not([aria-disabled="true"]) {
+  transform: translate3d(0, 0, 0) scale(0.98);
+  box-shadow: 0 1px 2px rgba(23, 32, 51, 0.06);
+  transition-duration: var(--mq-dur-fast);
+}
+
+[data-mq="pressable"] {
+  transition:
+    transform var(--mq-dur-fast) var(--mq-ease-standard),
+    background-color var(--mq-dur-base) var(--mq-ease-standard),
+    border-color var(--mq-dur-base) var(--mq-ease-standard);
+}
+
+[data-mq="pressable"]:active:not(:disabled) {
+  transform: scale(0.985);
+}
+
+/* Row hover — no lift, just a wash, so tables stay calm */
+[data-mq="row"] {
+  transition:
+    background-color var(--mq-dur-base) var(--mq-ease-standard),
+    box-shadow var(--mq-dur-base) var(--mq-ease-standard);
+}
+
+[data-mq="row"]:hover {
+  background-color: #fafbfc;
+}
+
+/* ------------------------------------------------------------
+   FOCUS
+
+   Keyboard users get a clear ring; mouse users don't. Applied
+   broadly on purpose — the app currently has no focus styling
+   at all, which is the one accessibility gap worth fixing
+   globally rather than per component.
+------------------------------------------------------------ */
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[tabindex]:focus-visible,
+[role="button"]:focus-visible,
+[role="switch"]:focus-visible {
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+  box-shadow: var(--mq-focus-ring);
+  border-radius: 6px;
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  border-color: #7651d8;
+  box-shadow: var(--mq-focus-ring);
+}
+
+/* ------------------------------------------------------------
+   OVERLAYS
+------------------------------------------------------------ */
+
+.mq-overlay {
+  animation: mq-fade-in var(--mq-dur-base) var(--mq-ease-out) both;
+}
+
+.mq-modal {
+  animation: mq-scale-in var(--mq-dur-slow) var(--mq-ease-out) both;
+}
+
+.mq-drawer {
+  animation: mq-slide-in-right var(--mq-dur-slow) var(--mq-ease-out) both;
+}
+
+.mq-dropdown {
+  transform-origin: top right;
+  animation: mq-scale-in var(--mq-dur-fast) var(--mq-ease-out) both;
+}
+
+.mq-toast {
+  animation: mq-slide-in-up var(--mq-dur-slow) var(--mq-ease-spring) both;
+}
+
+/* ------------------------------------------------------------
+   RESPONSIVE GRIDS
+
+   Inline styles cannot hold media queries, so the few layouts
+   that must collapse live here.
+------------------------------------------------------------ */
+
+.mq-grid-sidebar {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+  gap: 12px;
+}
+
+.mq-grid-halves {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+@media (max-width: 900px) {
+  .mq-grid-sidebar,
+  .mq-grid-halves {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ------------------------------------------------------------
+   LOADING
+------------------------------------------------------------ */
+
+[data-mq="skeleton"] {
+  animation: mq-shimmer 1.4s linear infinite;
+}
+
+[data-mq="spinner"] {
+  animation: mq-spin 700ms linear infinite;
+}
+
+/* ------------------------------------------------------------
+   REDUCED MOTION
+
+   Kill every animation and transform. Colour/shadow feedback
+   stays, so the UI is still responsive — just still.
+------------------------------------------------------------ */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  [data-mq="interactive"]:hover,
+  [data-mq="interactive"]:active,
+  [data-mq="pressable"]:active {
+    transform: none !important;
+  }
+
+  [data-mq-reveal][data-mq-reveal-armed] {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+
+  [data-mq="skeleton"] {
+    animation: none !important;
+  }
+}
