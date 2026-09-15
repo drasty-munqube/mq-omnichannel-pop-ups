@@ -8,6 +8,7 @@ import {
   getEligibleCampaigns,
   saveSubmission,
 } from "../models/popup-widget.server";
+import { touchSite } from "../models/site.server";
 
 /* ============================================================
    PUBLIC CROSS-SITE WIDGET ENDPOINT
@@ -72,8 +73,31 @@ export async function loader({
     );
   }
 
+  /* The widget reports the hostname it is running on. We turn
+     that into a site row (creating one the first time we see a
+     website) so the merchant can target campaigns per site and
+     can see where their snippet actually ended up.
+
+     If the host is missing or unusable, site stays null and
+     only all-website campaigns are served. Falling back to the
+     Referer means an older copy of the widget, cached on some
+     customer's site, still resolves correctly. */
+
+  const reportedHost =
+    url.searchParams.get("host") ||
+    request.headers.get("referer") ||
+    "";
+
+  const site = await touchSite(
+    shop,
+    reportedHost,
+  );
+
   return json({
-    campaigns: await getEligibleCampaigns(shop),
+    campaigns: await getEligibleCampaigns(
+      shop,
+      site ? site.id : null,
+    ),
   });
 }
 

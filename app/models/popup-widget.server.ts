@@ -22,17 +22,61 @@ export type EligibleCampaign = {
   steps: unknown;
 };
 
+/* ------------------------------------------------------------
+   Does this campaign belong on the website asking for it?
+
+   "all" means every website carrying the snippet, which is the
+   default and what every campaign created before site
+   targeting existed still uses. "selected" means the campaign
+   only runs on the sites the merchant picked.
+
+   siteId is null when the caller could not resolve the
+   hostname to a known site. In that case only all-website
+   campaigns are served, so an unrecognised domain can never
+   pull a campaign that was scoped to somewhere else.
+   ------------------------------------------------------------ */
+
+function runsOnSite(
+  campaign: {
+    siteTargetMode: string;
+    siteTargets: unknown;
+  },
+  siteId: string | null,
+) {
+  if (campaign.siteTargetMode !== "selected") {
+    return true;
+  }
+
+  if (!siteId) {
+    return false;
+  }
+
+  const targets = Array.isArray(
+    campaign.siteTargets,
+  )
+    ? (campaign.siteTargets as string[])
+    : [];
+
+  return targets.includes(siteId);
+}
+
 export async function getEligibleCampaigns(
   shop: string,
+  siteId: string | null = null,
 ): Promise<EligibleCampaign[]> {
-  const campaigns = await db.campaign.findMany({
-    where: {
-      shop,
-      status: "active",
-      popupId: { not: null },
-    },
-    orderBy: { updatedAt: "desc" },
-  });
+  const allCampaigns =
+    await db.campaign.findMany({
+      where: {
+        shop,
+        status: "active",
+        popupId: { not: null },
+      },
+      orderBy: { updatedAt: "desc" },
+    });
+
+  const campaigns = allCampaigns.filter(
+    (campaign) => runsOnSite(campaign, siteId),
+  );
 
   const popupIds = campaigns
     .map((campaign) => campaign.popupId)

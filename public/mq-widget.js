@@ -688,8 +688,19 @@
 
     var forcedId = forcedCampaignId();
 
+    /* The hostname decides which campaigns this website is
+       allowed to run. Sending it lets a merchant scope a
+       campaign to one site instead of every site carrying the
+       snippet. Campaigns set to "all websites" ignore it. */
+
     fetch(
-      apiUrl + "?shop=" + encodeURIComponent(shop),
+      apiUrl +
+        "?shop=" +
+        encodeURIComponent(shop) +
+        "&host=" +
+        encodeURIComponent(
+          window.location.hostname || "",
+        ),
     )
       .then(function (response) {
         return response.json();

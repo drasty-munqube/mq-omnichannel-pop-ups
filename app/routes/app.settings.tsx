@@ -1,8 +1,11 @@
-import { useState } from "react";
-
 import type { LoaderFunctionArgs } from "react-router";
-import { useLoaderData } from "react-router";
+import { Link, useLoaderData } from "react-router";
 
+import {
+  buildSnippet,
+  CodeBlock,
+  CopyButton,
+} from "../components/copy-snippet";
 import { authenticate } from "../shopify.server";
 
 /* ============================================================
@@ -34,107 +37,6 @@ export async function loader({
     shop: session.shop,
     appUrl,
   };
-}
-
-/* ============================================================
-   COPY BUTTON
-
-   Embedded apps run inside an iframe, where
-   navigator.clipboard can be blocked by permissions policy.
-   So: try the modern API first, fall back to the old
-   textarea + execCommand trick, and never throw either way.
-   ============================================================ */
-
-function CopyButton({
-  value,
-  label = "Copy code",
-}: {
-  value: string;
-  label?: string;
-}) {
-  const [copied, setCopied] = useState(false);
-
-  const copy = async () => {
-    let ok = false;
-
-    try {
-      await navigator.clipboard.writeText(value);
-      ok = true;
-    } catch {
-      try {
-        const area =
-          document.createElement("textarea");
-
-        area.value = value;
-        area.style.position = "fixed";
-        area.style.opacity = "0";
-
-        document.body.appendChild(area);
-        area.select();
-
-        ok = document.execCommand("copy");
-
-        document.body.removeChild(area);
-      } catch {
-        ok = false;
-      }
-    }
-
-    if (ok) {
-      setCopied(true);
-      window.setTimeout(
-        () => setCopied(false),
-        2000,
-      );
-    }
-  };
-
-  return (
-    <button
-      type="button"
-      onClick={copy}
-      style={{
-        padding: "8px 14px",
-        fontSize: 13,
-        fontWeight: 600,
-        color: copied ? "#0A6E4A" : "#FFFFFF",
-        background: copied
-          ? "#D9F2E6"
-          : "#1F2937",
-        border: "none",
-        borderRadius: 8,
-        cursor: "pointer",
-        whiteSpace: "nowrap",
-      }}
-    >
-      {copied ? "Copied" : label}
-    </button>
-  );
-}
-
-/* ============================================================
-   CODE BLOCK
-   ============================================================ */
-
-function CodeBlock({ code }: { code: string }) {
-  return (
-    <pre
-      style={{
-        margin: 0,
-        padding: 14,
-        overflowX: "auto",
-        fontSize: 12.5,
-        lineHeight: 1.6,
-        color: "#E5E7EB",
-        background: "#111827",
-        borderRadius: 10,
-        fontFamily:
-          "ui-monospace, SFMono-Regular, Menlo, monospace",
-      }}
-    >
-      <code>{code}</code>
-    </pre>
-  );
 }
 
 /* ============================================================
@@ -203,14 +105,7 @@ export default function Settings() {
   const { shop, appUrl } =
     useLoaderData<typeof loader>();
 
-  const snippet = [
-    "<script",
-    `  src="${appUrl}/mq-widget.js"`,
-    `  data-shop="${shop}"`,
-    "  async",
-    "></script>",
-  ].join("\n");
-
+  const snippet = buildSnippet(appUrl, shop);
   const demoUrl = `${appUrl}/demo.html`;
 
   return (
@@ -264,6 +159,17 @@ export default function Settings() {
               the demo page
             </s-link>{" "}
             and scroll down.
+          </s-paragraph>
+        </div>
+
+        <div style={{ marginTop: 10 }}>
+          <s-paragraph>
+            To control which campaign runs on
+            which website, open{" "}
+            <Link to="/app/websites">
+              Websites
+            </Link>
+            .
           </s-paragraph>
         </div>
       </s-section>
@@ -359,6 +265,11 @@ export default function Settings() {
             A campaign only shows if both the
             campaign and the popup it is linked to
             are set to Live.
+          </s-list-item>
+          <s-list-item>
+            A campaign also has to be allowed on
+            that website. Campaigns are set to run
+            on all websites by default.
           </s-list-item>
           <s-list-item>
             On non-Shopify sites, only campaigns

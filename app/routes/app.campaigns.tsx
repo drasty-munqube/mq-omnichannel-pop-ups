@@ -12,6 +12,10 @@ import {
 } from "react-router";
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
+import {
+  ensureShopifySite,
+  listSites,
+} from "../models/site.server";
 
 /* ============================================================
    STOREFRONT ROUTE TARGETS
@@ -336,6 +340,23 @@ export async function loader({
       "Could not load your Shopify discounts. Approve the updated app permissions to pick a discount here.";
   }
 
+  /* WEBSITES THIS CAMPAIGN CAN RUN ON
+
+     ensureShopifySite means the storefront is always in the
+     list, even for shops that installed before site targeting
+     existed. */
+
+  await ensureShopifySite(session.shop);
+
+  const sites = (
+    await listSites(session.shop)
+  ).map((site) => ({
+    id: site.id,
+    name: site.name,
+    domain: site.domain,
+    kind: site.kind,
+  }));
+
   return {
     popups,
     campaigns,
@@ -343,6 +364,7 @@ export async function loader({
     shopPagesError,
     discounts,
     discountsError,
+    sites,
   };
 }
 
@@ -512,6 +534,18 @@ export async function action({
         ? "specific"
         : "all";
 
+    /* Which websites this campaign is allowed on. "all" is the
+       default and what every campaign created before site
+       targeting existed uses, so nothing already live changes
+       behaviour. */
+
+    const siteTargetMode =
+      String(
+        formData.get("siteTargetMode") || "all",
+      ).trim() === "selected"
+        ? "selected"
+        : "all";
+
     const triggerDelaySeconds = Math.min(
       120,
       Math.max(
@@ -546,6 +580,24 @@ export async function action({
 
     if (!Array.isArray(pageTargets)) {
       pageTargets = [];
+    }
+
+    let siteTargets: string[] = [];
+
+    try {
+      const parsed = JSON.parse(
+        String(
+          formData.get("siteTargets") || "[]",
+        ),
+      );
+
+      siteTargets = Array.isArray(parsed)
+        ? parsed
+            .map((value) => String(value))
+            .filter(Boolean)
+        : [];
+    } catch {
+      siteTargets = [];
     }
 
     /* SERVER-SIDE VALIDATION */
@@ -605,6 +657,20 @@ export async function action({
             "Select at least one page, or target all pages.",
         };
       }
+
+      /* Publishing a campaign scoped to no website at all
+         would put it live where nobody can ever see it. */
+
+      if (
+        siteTargetMode === "selected" &&
+        siteTargets.length === 0
+      ) {
+        return {
+          ok: false,
+          error:
+            "Select at least one website, or target all websites.",
+        };
+      }
     }
 
     if (popupId) {
@@ -624,6 +690,28 @@ export async function action({
       }
     }
 
+    /* Only keep site ids that actually belong to this shop, so
+       a tampered form can never point a campaign at someone
+       else's website or at a row that has since been deleted. */
+
+    if (siteTargets.length > 0) {
+      const ownedSites = await db.site.findMany({
+        where: {
+          shop: session.shop,
+          id: { in: siteTargets },
+        },
+        select: { id: true },
+      });
+
+      const ownedIds = new Set(
+        ownedSites.map((site) => site.id),
+      );
+
+      siteTargets = siteTargets.filter((id) =>
+        ownedIds.has(id),
+      );
+    }
+
     const data = {
       name,
       description,
@@ -635,6 +723,8 @@ export async function action({
       triggerScrollPercent,
       pageTargetMode,
       pageTargets: pageTargets as any,
+      siteTargetMode,
+      siteTargets: siteTargets as any,
       reward,
       rewardDiscountId:
         rewardDiscountId || null,
@@ -783,6 +873,7 @@ export default function Campaigns() {
     shopPagesError,
     discounts,
     discountsError,
+    sites,
   } = useLoaderData<typeof loader>();
 
   const submit = useSubmit();
@@ -875,6 +966,34 @@ export default function Campaigns() {
     );
 
     clearError("pageTargets");
+  };
+
+  /* =========================================================
+     WEBSITE TARGETING
+
+     Page targeting above is about where inside a storefront a
+     popup shows. This is about which website it shows on at
+     all, which matters as soon as the embed snippet is on more
+     than one site.
+  ========================================================= */
+
+  const [siteTargetMode, setSiteTargetMode] =
+    useState<"all" | "selected">("all");
+
+  const [siteTargets, setSiteTargets] = useState<
+    string[]
+  >([]);
+
+  const toggleSiteTarget = (value: string) => {
+    setSiteTargets((current) =>
+      current.includes(value)
+        ? current.filter(
+            (item) => item !== value,
+          )
+        : [...current, value],
+    );
+
+    clearError("siteTargets");
   };
 
   /* =========================================================
@@ -1013,6 +1132,8 @@ export default function Campaigns() {
     setTriggerScrollPercent(50);
     setPageTargetMode("all");
     setPageTargets([]);
+    setSiteTargetMode("all");
+    setSiteTargets([]);
     setPopupSearch("");
     setPopupPage(1);
     setErrors({});
@@ -1072,6 +1193,16 @@ export default function Campaigns() {
     setPageTargets(
       Array.isArray(campaign.pageTargets)
         ? (campaign.pageTargets as string[])
+        : [],
+    );
+    setSiteTargetMode(
+      campaign.siteTargetMode === "selected"
+        ? "selected"
+        : "all",
+    );
+    setSiteTargets(
+      Array.isArray(campaign.siteTargets)
+        ? (campaign.siteTargets as string[])
         : [],
     );
     setPopupSearch("");
@@ -1217,6 +1348,18 @@ export default function Campaigns() {
           : [],
       ),
     );
+    formData.append(
+      "siteTargetMode",
+      siteTargetMode,
+    );
+    formData.append(
+      "siteTargets",
+      JSON.stringify(
+        siteTargetMode === "selected"
+          ? siteTargets
+          : [],
+      ),
+    );
 
     submit(formData, { method: "post" });
   };
@@ -1357,6 +1500,14 @@ export default function Campaigns() {
       ) {
         stepErrors.pageTargets =
           "Select at least one page, or switch to all pages.";
+      }
+
+      if (
+        siteTargetMode === "selected" &&
+        siteTargets.length === 0
+      ) {
+        stepErrors.siteTargets =
+          "Select at least one website, or switch to all websites.";
       }
     }
 
@@ -4958,6 +5109,260 @@ export default function Campaigns() {
 
                   </div>
 
+                  {/* =============================================
+                      WHICH WEBSITES?
+
+                      Page targeting above is about where inside
+                      a storefront the popup shows. This is about
+                      which website it shows on at all, which
+                      starts to matter the moment the embed
+                      snippet is on more than one site.
+                  ============================================= */}
+
+                  <div
+                    style={{
+                      marginTop: "36px",
+                      paddingTop: "28px",
+                      borderTop: "1px solid #E7EBEF",
+                    }}
+                  >
+
+                    <h2
+                      style={{
+                        margin: "0 0 8px",
+                        fontSize: "24px",
+                        color: "#172033",
+                      }}
+                    >
+                      Which websites?
+                    </h2>
+
+                    <p
+                      style={{
+                        margin: 0,
+                        color: "#6B7280",
+                        fontSize: "14px",
+                      }}
+                    >
+                      Your storefront and every website
+                      carrying the embed snippet can run
+                      this campaign. Narrow it down if it
+                      belongs on only some of them.
+                    </p>
+
+                    {/* MODE TOGGLE */}
+
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: "10px",
+                        marginTop: "20px",
+                      }}
+                    >
+                      {(
+                        [
+                          {
+                            value: "all" as const,
+                            label: "All websites",
+                            text: "Run anywhere the snippet is installed.",
+                          },
+                          {
+                            value:
+                              "selected" as const,
+                            label: "Selected websites",
+                            text: "Choose exactly which sites run it.",
+                          },
+                        ]
+                      ).map((mode) => (
+                        <button
+                          key={mode.value}
+                          type="button"
+                          onClick={() => {
+                            setSiteTargetMode(
+                              mode.value,
+                            );
+                            clearError(
+                              "siteTargets",
+                            );
+                          }}
+                          style={{
+                            flex: 1,
+                            textAlign: "left",
+                            padding: "15px 18px",
+                            background:
+                              siteTargetMode ===
+                              mode.value
+                                ? "#F3F7FB"
+                                : "#FFFFFF",
+                            border:
+                              siteTargetMode ===
+                              mode.value
+                                ? "2px solid #0B3D66"
+                                : "1px solid #DCE3EA",
+                            borderRadius: "9px",
+                            cursor: "pointer",
+                          }}
+                        >
+                          <strong
+                            style={{
+                              display: "block",
+                              color: "#172033",
+                              fontSize: "14px",
+                            }}
+                          >
+                            {mode.label}
+                          </strong>
+
+                          <span
+                            style={{
+                              display: "block",
+                              marginTop: "4px",
+                              fontSize: "12px",
+                              color: "#6B7280",
+                            }}
+                          >
+                            {mode.text}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+
+                    {siteTargetMode ===
+                      "selected" && (
+                      <div
+                        style={{ marginTop: "20px" }}
+                      >
+
+                        {sites.length === 0 ? (
+                          <div
+                            style={{
+                              padding: "14px 16px",
+                              fontSize: "13px",
+                              color: "#6B7280",
+                              background: "#F8FAFC",
+                              border:
+                                "1px solid #E7EBEF",
+                              borderRadius: "9px",
+                            }}
+                          >
+                            No websites yet. Add one
+                            under Websites in the left
+                            menu, then come back here.
+                          </div>
+                        ) : (
+                          <div
+                            style={{
+                              display: "grid",
+                              gridTemplateColumns:
+                                "repeat(auto-fit, minmax(240px, 1fr))",
+                              gap: "10px",
+                            }}
+                          >
+                            {sites.map((site) => {
+                              const checked =
+                                siteTargets.includes(
+                                  site.id,
+                                );
+
+                              return (
+                                <label
+                                  key={site.id}
+                                  style={{
+                                    display: "flex",
+                                    alignItems:
+                                      "flex-start",
+                                    gap: "10px",
+                                    padding:
+                                      "12px 14px",
+                                    background: checked
+                                      ? "#F3F7FB"
+                                      : "#FFFFFF",
+                                    border: checked
+                                      ? "2px solid #0B3D66"
+                                      : "1px solid #DCE3EA",
+                                    borderRadius: "9px",
+                                    cursor: "pointer",
+                                  }}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={checked}
+                                    onChange={() =>
+                                      toggleSiteTarget(
+                                        site.id,
+                                      )
+                                    }
+                                    style={{
+                                      marginTop: "2px",
+                                    }}
+                                  />
+
+                                  <span
+                                    style={{
+                                      minWidth: 0,
+                                    }}
+                                  >
+                                    <span
+                                      style={{
+                                        display:
+                                          "block",
+                                        fontSize:
+                                          "13px",
+                                        color:
+                                          "#172033",
+                                        fontWeight: 600,
+                                      }}
+                                    >
+                                      {site.name}
+                                    </span>
+
+                                    <span
+                                      style={{
+                                        display:
+                                          "block",
+                                        fontSize:
+                                          "11px",
+                                        color:
+                                          "#9AA4B2",
+                                        wordBreak:
+                                          "break-all",
+                                      }}
+                                    >
+                                      {site.kind ===
+                                      "shopify"
+                                        ? "Shopify storefront"
+                                        : site.domain}
+                                    </span>
+                                  </span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        )}
+
+                        {renderError("siteTargets")}
+
+                        {siteTargets.length > 0 && (
+                          <div
+                            style={{
+                              marginTop: "12px",
+                              fontSize: "12px",
+                              color: "#6B7280",
+                            }}
+                          >
+                            {siteTargets.length} website
+                            {siteTargets.length === 1
+                              ? ""
+                              : "s"}{" "}
+                            selected
+                          </div>
+                        )}
+
+                      </div>
+                    )}
+
+                  </div>
+
                 </div>
 
               )}
@@ -5615,6 +6020,59 @@ export default function Campaigns() {
                                   : "s"
                               }`}
                         </strong>
+                      </div>
+
+                      <div>
+                        <span
+                          style={{
+                            display: "block",
+                            fontSize: "11px",
+                            color: "#9AA4B2",
+                            marginBottom: "4px",
+                          }}
+                        >
+                          WEBSITES
+                        </span>
+
+                        <strong
+                          style={{
+                            color: "#172033",
+                            fontSize: "14px",
+                          }}
+                        >
+                          {siteTargetMode === "all"
+                            ? "All websites"
+                            : `${siteTargets.length} selected website${
+                                siteTargets.length ===
+                                1
+                                  ? ""
+                                  : "s"
+                              }`}
+                        </strong>
+
+                        {siteTargetMode ===
+                          "selected" &&
+                          siteTargets.length > 0 && (
+                            <span
+                              style={{
+                                display: "block",
+                                marginTop: "4px",
+                                fontSize: "11px",
+                                color: "#9AA4B2",
+                              }}
+                            >
+                              {sites
+                                .filter((site) =>
+                                  siteTargets.includes(
+                                    site.id,
+                                  ),
+                                )
+                                .map(
+                                  (site) => site.name,
+                                )
+                                .join(", ")}
+                            </span>
+                          )}
                       </div>
 
                     </div>

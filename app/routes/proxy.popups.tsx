@@ -8,6 +8,7 @@ import {
   getEligibleCampaigns,
   saveSubmission,
 } from "../models/popup-widget.server";
+import { ensureShopifySite } from "../models/site.server";
 
 /* ============================================================
    SHOPIFY STOREFRONT ENDPOINT (App Proxy)
@@ -49,8 +50,19 @@ export async function loader({
     );
   }
 
+  /* The storefront is a targetable site like any other, so it
+     needs its own row before a campaign can be scoped to it.
+     Created on demand here, which means shops that existed
+     before site targeting get one on their next storefront
+     request without a data migration. */
+
+  const site = await ensureShopifySite(shop);
+
   return Response.json({
-    campaigns: await getEligibleCampaigns(shop),
+    campaigns: await getEligibleCampaigns(
+      shop,
+      site ? site.id : null,
+    ),
   });
 }
 

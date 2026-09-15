@@ -52,11 +52,35 @@ model Campaign {
   triggerScrollPercent Int      @default(50)
   pageTargetMode       String   @default("all")
   pageTargets          Json
+  siteTargetMode       String   @default("all")
+  siteTargets          Json     @default("[]")
   reward               String
   rewardDiscountId     String?
   rewardDiscountCode   String?
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
+}
+
+// A website the merchant runs campaigns on. The Shopify storefront
+// itself is stored here too (kind = "shopify") so that every surface
+// the widget can appear on is addressable from one place.
+//
+// "domain" is always a bare, lowercased hostname with no scheme, no
+// port and no www prefix, so that what the browser reports and what
+// the merchant typed compare equal.
+model Site {
+  id         String    @id @default(cuid())
+  shop       String
+  name       String
+  domain     String
+  kind       String    @default("external")
+  autoAdded  Boolean   @default(false)
+  lastSeenAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@unique([shop, domain])
+  @@index([shop])
 }
 
 model Contact {
