@@ -1,3 +1,9 @@
 .cache
 build
 node_modules
+
+# Never bake local env into the image: Prisma's CLI auto-loads .env at
+# container start, and it points DATABASE_URL at localhost.
+.env
+.env.*
+.git
