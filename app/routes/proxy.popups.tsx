@@ -4,19 +4,22 @@ import type {
 } from "react-router";
 
 import { authenticate } from "../shopify.server";
-import db from "../db.server";
+import {
+  getEligibleCampaigns,
+  saveSubmission,
+} from "../models/popup-widget.server";
 
 /* ============================================================
-   PUBLIC STOREFRONT ENDPOINT (Shopify App Proxy)
+   SHOPIFY STOREFRONT ENDPOINT (App Proxy)
 
    Reached at https://<shop>/apps/mq-popups/popups by the theme
    app extension. Shopify signs every request; authenticate.
    public.appProxy(request) verifies that signature before this
    code runs, so no separate auth check is needed here.
 
-   GET  -> the live campaigns (+ their popup content) eligible
-           to show on the storefront right now.
-   POST -> a shopper's popup form submission, stored as a Contact.
+   For any OTHER website (not a Shopify storefront), see
+   app/routes/api.widget.tsx instead — App Proxy only works
+   from inside Shopify.
    ============================================================ */
 
 function resolveShop(
@@ -46,63 +49,8 @@ export async function loader({
     );
   }
 
-  const campaigns = await db.campaign.findMany({
-    where: {
-      shop,
-      status: "active",
-      popupId: { not: null },
-    },
-    orderBy: { updatedAt: "desc" },
-  });
-
-  const popupIds = campaigns
-    .map((campaign) => campaign.popupId)
-    .filter((id): id is string => Boolean(id));
-
-  const popups = await db.popup.findMany({
-    where: {
-      shop,
-      id: { in: popupIds },
-      status: "active",
-    },
-  });
-
-  const popupById = new Map(
-    popups.map((popup) => [popup.id, popup]),
-  );
-
-  const eligible = campaigns
-    .map((campaign) => {
-      const popup = campaign.popupId
-        ? popupById.get(campaign.popupId)
-        : null;
-
-      if (!popup) {
-        return null;
-      }
-
-      return {
-        campaignId: campaign.id,
-        popupId: popup.id,
-        popupName: popup.name,
-        trigger: campaign.trigger,
-        triggerDelaySeconds:
-          campaign.triggerDelaySeconds,
-        triggerScrollPercent:
-          campaign.triggerScrollPercent,
-        pageTargetMode: campaign.pageTargetMode,
-        pageTargets: Array.isArray(
-          campaign.pageTargets,
-        )
-          ? campaign.pageTargets
-          : [],
-        steps: popup.steps,
-      };
-    })
-    .filter((campaign) => campaign !== null);
-
   return Response.json({
-    campaigns: eligible,
+    campaigns: await getEligibleCampaigns(shop),
   });
 }
 
@@ -121,15 +69,7 @@ export async function action({
     );
   }
 
-  let body: {
-    popupId?: string;
-    popupName?: string;
-    campaignId?: string;
-    email?: string;
-    phone?: string;
-    fields?: Record<string, string>;
-    pageUrl?: string;
-  };
+  let body;
 
   try {
     body = await request.json();
@@ -140,29 +80,8 @@ export async function action({
     );
   }
 
-  const fields = body.fields || {};
-
-  const email =
-    body.email ||
-    Object.values(fields).find((value) =>
-      /@/.test(value || ""),
-    ) ||
-    null;
-
   try {
-    await db.contact.create({
-      data: {
-        shop,
-        popupId: body.popupId || null,
-        popupName: body.popupName || null,
-        campaignId: body.campaignId || null,
-        email,
-        phone: body.phone || null,
-        fields,
-        pageUrl: body.pageUrl || null,
-      },
-    });
-
+    await saveSubmission(shop, body);
     return Response.json({ ok: true });
   } catch (error) {
     console.error(
