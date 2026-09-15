@@ -2,7 +2,7 @@
 
 client_id = "fcfc9a4d097815f8d1f3d6c2ecbcaa94"
 name = "MQ: Omnichannel Pop-ups"
-application_url = "https://columns-herald-inspiration-creature.trycloudflare.com"
+application_url = "https://mq-omnichannel-pop-ups.onrender.com"
 embedded = true
 
 [access_scopes]
@@ -12,7 +12,7 @@ optional_scopes = [ ]
 use_legacy_install_flow = false
 
 [app_proxy]
-url = "https://columns-herald-inspiration-creature.trycloudflare.com/proxy"
+url = "https://mq-omnichannel-pop-ups.onrender.com"
 subpath = "mq-popups"
 prefix = "apps"
 
@@ -61,7 +61,9 @@ actions = ["update"]
 uri = "/events/products"
 
 [auth]
-redirect_urls = [ ]
+redirect_urls = [
+  "https://mq-omnichannel-pop-ups.onrender.com/auth/callback"
+]
 
 [build]
 automatically_update_urls_on_dev = true
