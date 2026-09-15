@@ -156,10 +156,28 @@
     }
   }
 
-  /* Deliberately no "already submitted" memory here: a past
-     submission should never permanently lock this campaign to
-     the Success step on later visits — see openOffer() below,
-     which always opens on the real Offer step. */
+  function markSubmitted(campaignId) {
+    try {
+      window.localStorage.setItem(
+        "mq_submitted_" + campaignId,
+        "1",
+      );
+    } catch (error) {
+      /* localStorage unavailable */
+    }
+  }
+
+  function alreadySubmitted(campaignId) {
+    try {
+      return (
+        window.localStorage.getItem(
+          "mq_submitted_" + campaignId,
+        ) === "1"
+      );
+    } catch (error) {
+      return false;
+    }
+  }
 
   /* ------------------------------------------------------------
      STEP / SETTINGS HELPERS
@@ -385,6 +403,7 @@
         /* best-effort — the popup still moves to Success */
       })
       .then(function () {
+        markSubmitted(campaign.campaignId);
         onDone();
       });
   }
@@ -675,11 +694,6 @@
       if (overlay) {
         return;
       }
-
-      /* Hide the teaser while the offer is open — otherwise
-         both are visible stacked on top of each other. */
-      pill.remove();
-
       overlay = el("div", {
         position: "fixed",
         inset: "0",
@@ -702,11 +716,11 @@
         },
       );
       document.body.appendChild(overlay);
-
-      /* Always open on the real Offer step. Success only shows
-         right after an actual submission in this same visit —
-         it should never be "stuck" from a past visit. */
-      showStep("offer");
+      showStep(
+        alreadySubmitted(campaign.campaignId)
+          ? "success"
+          : "offer",
+      );
     }
 
     /* ---------------- TRIGGER ---------------- */
