@@ -1,25 +1,59 @@
 /* ============================================================
-   MQ Popups — storefront runtime
+   MQ Popups — universal embed script
 
-   Vanilla JS on purpose: this file ships straight to shoppers'
-   browsers from Shopify's CDN, so it stays framework-free and
-   dependency-free. It mirrors the same Step/Block/PopupSettings
-   shape produced by the admin popup builder
-   (app/routes/app_.popups.new.tsx) and renders it live.
+   Drop this on ANY website (not just Shopify):
+
+     <script
+       src="https://<your-app-domain>/mq-widget.js"
+       data-shop="your-shop.myshopify.com"
+       async
+     ></script>
+
+   "data-shop" is the Shopify store this app is installed on —
+   that's what identifies which campaigns/popups to load. It
+   works on any domain because it talks to /api/widget, a public
+   CORS-open endpoint (app/routes/api.widget.tsx), instead of
+   Shopify's App Proxy (which only works from inside a Shopify
+   storefront — see extensions/mq-popup-embed for that version).
+
+   Vanilla JS, no dependencies, safe to fail silently: nothing
+   here should ever break the host page.
+
+   KNOWN LIMIT: "Specific pages" campaign targeting only
+   understands Shopify page types (home/product/collection/…),
+   so on a non-Shopify site those campaigns are skipped — only
+   "All pages" campaigns show here for now.
    ============================================================ */
 
 (function () {
   "use strict";
 
-  var root = document.getElementById("mq-popup-root");
-  if (!root) {
+  var thisScript = document.currentScript;
+  if (!thisScript) {
     return;
   }
 
-  var shop = root.dataset.shop;
-  var pageType = root.dataset.pageType || "";
-  var pageHandle = root.dataset.pageHandle || "";
-  var proxyPath = root.dataset.proxyPath || "/apps/mq-popups";
+  var shop = thisScript.getAttribute("data-shop");
+  if (!shop) {
+    console.warn(
+      "[MQ Popups] missing data-shop attribute on the embed script tag.",
+    );
+    return;
+  }
+
+  var apiOrigin = (function () {
+    try {
+      return new URL(thisScript.src).origin;
+    } catch (error) {
+      return "";
+    }
+  })();
+
+  if (!apiOrigin) {
+    return;
+  }
+
+  var apiUrl = apiOrigin + "/api/widget";
 
   var DEFAULT_SETTINGS = {
     bodyBackground: "#FFFFFF",
@@ -42,61 +76,34 @@
     audienceDevice: "all",
   };
 
+  var STORAGE_PREFIX = "mq_widget_";
+
   /* ------------------------------------------------------------
-     PAGE / DEVICE / AUDIENCE MATCHING
+     AUDIENCE / DISMISS STATE
   ------------------------------------------------------------ */
 
-  function routeIdForPageType(type) {
-    var map = {
-      index: "route:index",
-      product: "route:product",
-      collection: "route:collection",
-      cart: "route:cart",
-      search: "route:search",
-      article: "route:blog",
-      blog: "route:blog",
-    };
-    return map[type] || null;
+  function safeGet(key) {
+    try {
+      return window.localStorage.getItem(key);
+    } catch (error) {
+      return null;
+    }
   }
 
-  function matchesPageTargets(campaign) {
-    if (campaign.pageTargetMode !== "specific") {
-      return true;
+  function safeSet(key, value) {
+    try {
+      window.localStorage.setItem(key, value);
+    } catch (error) {
+      /* localStorage unavailable — degrade silently */
     }
-
-    var targets = campaign.pageTargets || [];
-    var routeId = routeIdForPageType(pageType);
-
-    if (routeId && targets.indexOf(routeId) !== -1) {
-      return true;
-    }
-
-    if (
-      pageHandle &&
-      targets.indexOf("page:" + pageHandle) !== -1
-    ) {
-      return true;
-    }
-
-    return false;
   }
 
   function isReturningVisitor() {
-    try {
-      return (
-        window.localStorage.getItem("mq_seen") === "1"
-      );
-    } catch (error) {
-      return false;
-    }
+    return safeGet(STORAGE_PREFIX + "seen") === "1";
   }
 
   function markVisited() {
-    try {
-      window.localStorage.setItem("mq_seen", "1");
-    } catch (error) {
-      /* localStorage unavailable — skip visit tracking */
-    }
+    safeSet(STORAGE_PREFIX + "seen", "1");
   }
 
   function matchesAudience(settings) {
@@ -112,17 +119,11 @@
 
     var isMobile = window.innerWidth < 768;
 
-    if (
-      settings.audienceDevice === "mobile" &&
-      !isMobile
-    ) {
+    if (settings.audienceDevice === "mobile" && !isMobile) {
       return false;
     }
 
-    if (
-      settings.audienceDevice === "desktop" &&
-      isMobile
-    ) {
+    if (settings.audienceDevice === "desktop" && isMobile) {
       return false;
     }
 
@@ -130,30 +131,21 @@
   }
 
   function dismissedRecently(campaignId) {
-    try {
-      var raw = window.localStorage.getItem(
-        "mq_dismissed_" + campaignId,
-      );
-      if (!raw) {
-        return false;
-      }
-      var dismissedAt = Number(raw);
-      var dayMs = 24 * 60 * 60 * 1000;
-      return Date.now() - dismissedAt < dayMs;
-    } catch (error) {
+    var raw = safeGet(
+      STORAGE_PREFIX + "dismissed_" + campaignId,
+    );
+    if (!raw) {
       return false;
     }
+    var dayMs = 24 * 60 * 60 * 1000;
+    return Date.now() - Number(raw) < dayMs;
   }
 
   function markDismissed(campaignId) {
-    try {
-      window.localStorage.setItem(
-        "mq_dismissed_" + campaignId,
-        String(Date.now()),
-      );
-    } catch (error) {
-      /* localStorage unavailable */
-    }
+    safeSet(
+      STORAGE_PREFIX + "dismissed_" + campaignId,
+      String(Date.now()),
+    );
   }
 
   /* Deliberately no "already submitted" memory here: a past
@@ -176,8 +168,7 @@
 
   function popupSettingsFor(steps) {
     var offer = findStep(steps, "offer");
-    var settings =
-      (offer && offer.settings) || {};
+    var settings = (offer && offer.settings) || {};
 
     var merged = {};
     for (var key in DEFAULT_SETTINGS) {
@@ -238,19 +229,14 @@
       fontFamily: block.fontFamily || "inherit",
       fontWeight: block.bold ? "700" : "400",
       fontStyle: block.italic ? "italic" : "normal",
-      letterSpacing:
-        (block.letterSpacing || 0) + "px",
+      letterSpacing: (block.letterSpacing || 0) + "px",
       opacity: String(
-        (block.opacity != null
-          ? block.opacity
-          : 100) / 100,
+        (block.opacity != null ? block.opacity : 100) /
+          100,
       ),
     };
 
-    if (
-      block.type === "button" ||
-      block.type === "channel"
-    ) {
+    if (block.type === "button" || block.type === "channel") {
       var button = el(
         "button",
         Object.assign({}, common, {
@@ -287,36 +273,6 @@
     }
 
     if (block.type === "field") {
-      var inputTypeMap = {
-        text: "text",
-        number: "number",
-        email: "email",
-        phone: "tel",
-      };
-      var inputType =
-        inputTypeMap[block.fieldType] || "text";
-
-      var attrs = {
-        type: inputType,
-        placeholder:
-          block.placeholder || block.text || "",
-        "data-mq-field": block.id,
-        "data-mq-field-type":
-          block.fieldType || "text",
-      };
-
-      if (block.fieldRequired) {
-        attrs.required = "required";
-      }
-
-      if (inputType === "number") {
-        attrs.inputmode = "numeric";
-      }
-
-      if (inputType === "tel") {
-        attrs.inputmode = "tel";
-      }
-
       var input = el(
         "input",
         Object.assign({}, common, {
@@ -332,15 +288,35 @@
               : 12) +
             "px",
           border:
-            "1px solid " +
-            (block.borderColor || "#D1D5DB"),
+            "1px solid " + (block.borderColor || "#D1D5DB"),
           borderRadius:
             (block.borderRadius != null
               ? block.borderRadius
               : 8) + "px",
         }),
-        attrs,
+        {
+          type:
+            block.fieldType === "number"
+              ? "number"
+              : block.fieldType === "phone"
+                ? "tel"
+                : block.fieldType === "email"
+                  ? "email"
+                  : /email/i.test(
+                        block.placeholder ||
+                          block.text ||
+                          "",
+                      )
+                    ? "email"
+                    : "text",
+          placeholder:
+            block.placeholder || block.text || "",
+          "data-mq-field": block.id,
+        },
       );
+      if (block.fieldRequired) {
+        input.setAttribute("required", "required");
+      }
       return input;
     }
 
@@ -350,29 +326,23 @@
   }
 
   /* ------------------------------------------------------------
-     WIDGET
+     SUBMIT
   ------------------------------------------------------------ */
 
-  function submitContact(
-    campaign,
-    fieldValues,
-    emailValue,
-    onDone,
-  ) {
-    var email = emailValue;
-    if (!email) {
-      for (var key in fieldValues) {
-        if (/@/.test(fieldValues[key] || "")) {
-          email = fieldValues[key];
-          break;
-        }
+  function submitContact(campaign, fieldValues, onDone) {
+    var email = null;
+    for (var key in fieldValues) {
+      if (/@/.test(fieldValues[key] || "")) {
+        email = fieldValues[key];
+        break;
       }
     }
 
-    fetch(proxyPath + "/popups?shop=" + encodeURIComponent(shop), {
+    fetch(apiUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        shop: shop,
         popupId: campaign.popupId,
         popupName: campaign.popupName,
         campaignId: campaign.campaignId,
@@ -382,12 +352,16 @@
       }),
     })
       .catch(function () {
-        /* best-effort — the popup still moves to Success */
+        /* best-effort — the widget still advances to Success */
       })
       .then(function () {
         onDone();
       });
   }
+
+  /* ------------------------------------------------------------
+     WIDGET
+  ------------------------------------------------------------ */
 
   function buildWidget(campaign) {
     var settings = popupSettingsFor(campaign.steps);
@@ -414,10 +388,7 @@
         "-apple-system, BlinkMacSystemFont, sans-serif",
     });
 
-    var teaserStep = findStep(
-      campaign.steps,
-      "teaser",
-    );
+    var teaserStep = findStep(campaign.steps, "teaser");
     var teaserText =
       (teaserStep &&
         teaserStep.blocks[0] &&
@@ -466,9 +437,7 @@
       { type: "button", "aria-label": "Dismiss" },
     );
     pillClose.textContent = "×";
-    pillClose.addEventListener("click", function (
-      event,
-    ) {
+    pillClose.addEventListener("click", function (event) {
       event.stopPropagation();
       markDismissed(campaign.campaignId);
       pill.remove();
@@ -486,8 +455,7 @@
       var card = el("div", {
         width: "100%",
         maxWidth: "360px",
-        borderRadius:
-          settings.popupBorderRadius + "px",
+        borderRadius: settings.popupBorderRadius + "px",
         overflow: "hidden",
         background: settings.bodyBackground,
         boxShadow: "0 20px 50px rgba(0,0,0,.4)",
@@ -514,12 +482,8 @@
           b < campaign.steps[s].blocks.length;
           b += 1
         ) {
-          if (
-            campaign.steps[s].blocks[b].type ===
-            "brand"
-          ) {
-            brandBlock =
-              campaign.steps[s].blocks[b];
+          if (campaign.steps[s].blocks[b].type === "brand") {
+            brandBlock = campaign.steps[s].blocks[b];
           }
         }
       }
@@ -538,24 +502,18 @@
           top: "12px",
           width: settings.closeButtonSize + "px",
           height: settings.closeButtonSize + "px",
-          borderRadius:
-            settings.closeButtonRadius + "%",
+          borderRadius: settings.closeButtonRadius + "%",
           border: "none",
-          background:
-            settings.closeButtonBackground,
+          background: settings.closeButtonBackground,
           color: settings.closeButtonColor,
           cursor: "pointer",
         },
         { type: "button" },
       );
-      closeButton.textContent =
-        settings.closeButtonText;
-      closeButton.addEventListener(
-        "click",
-        function () {
-          closeOverlay();
-        },
-      );
+      closeButton.textContent = settings.closeButtonText;
+      closeButton.addEventListener("click", function () {
+        closeOverlay();
+      });
       header.appendChild(closeButton);
 
       var body = el("div", {
@@ -563,11 +521,11 @@
         boxSizing: "border-box",
       });
 
-      var contentBlocks = step.blocks.filter(
-        function (block) {
-          return block.type !== "brand";
-        },
-      );
+      var contentBlocks = step.blocks.filter(function (
+        block,
+      ) {
+        return block.type !== "brand";
+      });
 
       contentBlocks.forEach(function (block) {
         body.appendChild(
@@ -579,10 +537,7 @@
         );
       });
 
-      if (
-        settings.footerVisible &&
-        stepId === "offer"
-      ) {
+      if (settings.footerVisible && stepId === "offer") {
         var footer = el(
           "div",
           {
@@ -596,12 +551,9 @@
           { type: "button" },
         );
         footer.textContent = settings.footerText;
-        footer.addEventListener(
-          "click",
-          function () {
-            closeOverlay();
-          },
-        );
+        footer.addEventListener("click", function () {
+          closeOverlay();
+        });
         body.appendChild(footer);
       }
 
@@ -611,46 +563,16 @@
     }
 
     function handleOfferSubmit(body) {
-      var inputs = body.querySelectorAll(
-        "[data-mq-field]",
-      );
+      var inputs = body.querySelectorAll("[data-mq-field]");
       var values = {};
-      var emailValue = null;
-
       for (var i = 0; i < inputs.length; i += 1) {
-        var input = inputs[i];
-
-        if (
-          input.hasAttribute("required") &&
-          !input.value.trim()
-        ) {
-          input.style.borderColor = "#E0574F";
-          input.focus();
-          return;
-        }
-
-        var fieldKey = input.getAttribute(
-          "data-mq-field",
-        );
-        values[fieldKey] = input.value;
-
-        if (
-          input.getAttribute(
-            "data-mq-field-type",
-          ) === "email"
-        ) {
-          emailValue = input.value;
-        }
+        values[inputs[i].getAttribute("data-mq-field")] =
+          inputs[i].value;
       }
 
-      submitContact(
-        campaign,
-        values,
-        emailValue,
-        function () {
-          showStep("success");
-        },
-      );
+      submitContact(campaign, values, function () {
+        showStep("success");
+      });
     }
 
     function showStep(stepId) {
@@ -693,14 +615,11 @@
         fontFamily:
           "-apple-system, BlinkMacSystemFont, sans-serif",
       });
-      overlay.addEventListener(
-        "click",
-        function (event) {
-          if (event.target === overlay) {
-            closeOverlay();
-          }
-        },
-      );
+      overlay.addEventListener("click", function (event) {
+        if (event.target === overlay) {
+          closeOverlay();
+        }
+      });
       document.body.appendChild(overlay);
 
       /* Always open on the real Offer step. Success only shows
@@ -745,39 +664,88 @@
      BOOT
   ------------------------------------------------------------ */
 
-  markVisited();
-
-  fetch(proxyPath + "/popups?shop=" + encodeURIComponent(shop))
-    .then(function (response) {
-      return response.json();
-    })
-    .then(function (data) {
-      var campaigns = data.campaigns || [];
-
-      for (var i = 0; i < campaigns.length; i += 1) {
-        var campaign = campaigns[i];
-
-        if (!matchesPageTargets(campaign)) {
-          continue;
-        }
-
-        if (dismissedRecently(campaign.campaignId)) {
-          continue;
-        }
-
-        var settings = popupSettingsFor(
-          campaign.steps,
-        );
-
-        if (!matchesAudience(settings)) {
-          continue;
-        }
-
-        buildWidget(campaign);
-        break;
+  function forcedCampaignId() {
+    /* Demo/testing convenience: ?mq_campaign=<id> on the page
+       URL, or a data-campaign attribute on the script tag,
+       skips targeting/audience/dismiss checks and shows that
+       exact campaign. Never used in normal production traffic
+       unless a merchant deliberately links to it. */
+    try {
+      var fromUrl = new URL(window.location.href)
+        .searchParams.get("mq_campaign");
+      if (fromUrl) {
+        return fromUrl;
       }
-    })
-    .catch(function () {
-      /* storefront should never break if this fails */
-    });
+    } catch (error) {
+      /* ignore */
+    }
+
+    return thisScript.getAttribute("data-campaign");
+  }
+
+  function boot() {
+    markVisited();
+
+    var forcedId = forcedCampaignId();
+
+    fetch(
+      apiUrl + "?shop=" + encodeURIComponent(shop),
+    )
+      .then(function (response) {
+        return response.json();
+      })
+      .then(function (data) {
+        var campaigns = data.campaigns || [];
+
+        if (forcedId) {
+          for (var f = 0; f < campaigns.length; f += 1) {
+            if (campaigns[f].campaignId === forcedId) {
+              buildWidget(campaigns[f]);
+              return;
+            }
+          }
+          console.warn(
+            "[MQ Popups] mq_campaign=" +
+              forcedId +
+              " did not match any live campaign for this shop.",
+          );
+          return;
+        }
+
+        for (var i = 0; i < campaigns.length; i += 1) {
+          var campaign = campaigns[i];
+
+          if (campaign.pageTargetMode === "specific") {
+            /* Shopify-specific page rules don't translate to
+               an arbitrary site — see file header. */
+            continue;
+          }
+
+          if (dismissedRecently(campaign.campaignId)) {
+            continue;
+          }
+
+          var settings = popupSettingsFor(campaign.steps);
+
+          if (!matchesAudience(settings)) {
+            continue;
+          }
+
+          buildWidget(campaign);
+          break;
+        }
+      })
+      .catch(function () {
+        /* the host page should never see this fail */
+      });
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener(
+      "DOMContentLoaded",
+      boot,
+    );
+  } else {
+    boot();
+  }
 })();
