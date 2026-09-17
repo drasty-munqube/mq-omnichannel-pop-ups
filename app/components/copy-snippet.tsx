@@ -121,3 +121,24 @@ export function buildSnippet(
     "></script>",
   ].join("\n");
 }
+
+/* ------------------------------------------------------------
+   Same snippet, pinned to one campaign. data-campaign narrows
+   the website down to that campaign only; the campaign's own
+   device, frequency and cooldown rules still apply on top.
+   ------------------------------------------------------------ */
+
+export function buildCampaignSnippet(
+  appUrl: string,
+  shop: string,
+  campaignId: string,
+) {
+  return [
+    "<script",
+    `  src="${appUrl}/mq-widget.js"`,
+    `  data-shop="${shop}"`,
+    `  data-campaign="${campaignId}"`,
+    "  async",
+    "></script>",
+  ].join("\n");
+}

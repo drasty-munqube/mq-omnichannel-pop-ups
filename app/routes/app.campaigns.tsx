@@ -16,6 +16,11 @@ import {
   ensureShopifySite,
   listSites,
 } from "../models/site.server";
+import {
+  buildCampaignSnippet,
+  CodeBlock,
+  CopyButton,
+} from "../components/copy-snippet";
 
 /* ============================================================
    STOREFRONT ROUTE TARGETS
@@ -357,6 +362,15 @@ export async function loader({
     kind: site.kind,
   }));
 
+  /* Needed to render a campaign's own embed snippet in the
+     wizard. Falls back to the request origin if the deploy
+     environment has not set SHOPIFY_APP_URL. */
+
+  const appUrl = (
+    process.env.SHOPIFY_APP_URL ||
+    new URL(request.url).origin
+  ).replace(/\/+$/, "");
+
   return {
     popups,
     campaigns,
@@ -365,6 +379,8 @@ export async function loader({
     discounts,
     discountsError,
     sites,
+    shop: session.shop,
+    appUrl,
   };
 }
 
@@ -967,6 +983,8 @@ export default function Campaigns() {
     discounts,
     discountsError,
     sites,
+    shop,
+    appUrl,
   } = useLoaderData<typeof loader>();
 
   const submit = useSubmit();
@@ -6017,6 +6035,119 @@ export default function Campaigns() {
                     where the snippet is installed shows
                     up there on its own.
                   </p>
+
+                  {/* =============================================
+                      THIS CAMPAIGN'S OWN SNIPPET
+
+                      The snippet under Websites runs whichever
+                      campaigns are eligible. This one is pinned
+                      with data-campaign, so the website it goes
+                      on runs this campaign and nothing else.
+
+                      It is a filter, not an override: the device,
+                      frequency and cooldown rules set above still
+                      decide whether it actually appears.
+
+                      Only shown once the campaign exists, because
+                      the id is what makes the snippet specific.
+                  ============================================= */}
+
+                  <div
+                    style={{
+                      marginTop: "36px",
+                      paddingTop: "28px",
+                      borderTop: "1px solid #E7EBEF",
+                    }}
+                  >
+
+                    <h2
+                      style={{
+                        margin: "0 0 8px",
+                        fontSize: "24px",
+                        color: "#172033",
+                      }}
+                    >
+                      Install code snippet
+                    </h2>
+
+                    <p
+                      style={{
+                        margin: 0,
+                        color: "#6B7280",
+                        fontSize: "14px",
+                      }}
+                    >
+                      Use this on a website that should
+                      run only this campaign. Paste it
+                      right before the closing body tag.
+                    </p>
+
+                    {editingCampaignId ? (
+                      <>
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent:
+                              "flex-end",
+                            marginTop: "16px",
+                            marginBottom: "8px",
+                          }}
+                        >
+                          <CopyButton
+                            value={buildCampaignSnippet(
+                              appUrl,
+                              shop,
+                              editingCampaignId,
+                            )}
+                          />
+                        </div>
+
+                        <CodeBlock
+                          code={buildCampaignSnippet(
+                            appUrl,
+                            shop,
+                            editingCampaignId,
+                          )}
+                        />
+
+                        <p
+                          style={{
+                            marginTop: "12px",
+                            fontSize: "12px",
+                            color: "#9AA4B2",
+                          }}
+                        >
+                          This only narrows that website
+                          down to this campaign. The
+                          frequency, cooldown and device
+                          rules above still decide
+                          whether it shows. For a website
+                          that should run whatever is
+                          eligible, use the general
+                          snippet under Websites instead.
+                        </p>
+                      </>
+                    ) : (
+                      <div
+                        style={{
+                          marginTop: "16px",
+                          padding: "14px 16px",
+                          fontSize: "13px",
+                          color: "#6B7280",
+                          background: "#F8FAFC",
+                          border: "1px solid #E7EBEF",
+                          borderRadius: "9px",
+                        }}
+                      >
+                        Save this campaign first. Its
+                        snippet needs the campaign's id,
+                        which only exists once it has
+                        been saved, so it will appear
+                        here when you reopen it.
+                      </div>
+                    )}
+
+                  </div>
 
                 </div>
 

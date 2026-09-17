@@ -9,6 +9,10 @@
        async
      ></script>
 
+   Add data-campaign="<id>" to run only one campaign on that
+   website. It narrows the choice; it does not override the
+   campaign's own device, frequency or cooldown rules.
+
    "data-shop" is the Shopify store this app is installed on —
    that's what identifies which campaigns/popups to load. It
    works on any domain because it talks to /api/widget, a public
@@ -798,23 +802,36 @@
      BOOT
   ------------------------------------------------------------ */
 
-  function forcedCampaignId() {
-    /* Demo/testing convenience: ?mq_campaign=<id> on the page
-       URL, or a data-campaign attribute on the script tag,
-       skips targeting/audience/dismiss checks and shows that
-       exact campaign. Never used in normal production traffic
-       unless a merchant deliberately links to it. */
-    try {
-      var fromUrl = new URL(window.location.href)
-        .searchParams.get("mq_campaign");
-      if (fromUrl) {
-        return fromUrl;
-      }
-    } catch (error) {
-      /* ignore */
-    }
+  /* Two different things, deliberately kept apart.
 
-    return thisScript.getAttribute("data-campaign");
+     forcedCampaignId is a preview: ?mq_campaign=<id> on the page
+     URL shows that campaign immediately and skips every check,
+     so a merchant can look at their own work. It only happens
+     when someone deliberately visits such a link.
+
+     pinnedCampaignId is production: data-campaign on the script
+     tag means "this website runs only this campaign". It is a
+     filter, not an override — device, frequency and cooldown
+     rules all still apply, exactly as they would without it.
+     Confusing the two would let a pinned snippet ignore the
+     caps the merchant set. */
+
+  function forcedCampaignId() {
+    try {
+      return (
+        new URL(
+          window.location.href,
+        ).searchParams.get("mq_campaign") || null
+      );
+    } catch (error) {
+      return null;
+    }
+  }
+
+  function pinnedCampaignId() {
+    return thisScript.getAttribute(
+      "data-campaign",
+    );
   }
 
   function boot() {
@@ -857,8 +874,19 @@
           return;
         }
 
+        var pinnedId = pinnedCampaignId();
+
         for (var i = 0; i < campaigns.length; i += 1) {
           var campaign = campaigns[i];
+
+          /* A pinned snippet narrows this website down to one
+             campaign, then every normal rule below still runs. */
+          if (
+            pinnedId &&
+            campaign.campaignId !== pinnedId
+          ) {
+            continue;
+          }
 
           if (campaign.pageTargetMode === "specific") {
             /* Shopify-specific page rules don't translate to
