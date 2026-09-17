@@ -99,6 +99,28 @@
     }
   }
 
+  function safeGet(key) {
+    try {
+      return window.localStorage.getItem(key);
+    } catch (error) {
+      return null;
+    }
+  }
+
+  function safeSet(key, value) {
+    try {
+      window.localStorage.setItem(key, value);
+    } catch (error) {
+      /* localStorage unavailable — degrade silently */
+    }
+  }
+
+  /* New-vs-returning still lives on the popup. Device targeting
+     used to live here too and no longer does — it is a campaign
+     setting now, handled by matchesDevices below. Kept identical
+     to public/mq-widget.js so the storefront and third-party
+     sites never disagree about who sees what. */
+
   function matchesAudience(settings) {
     var returning = isReturningVisitor();
 
@@ -110,50 +132,126 @@
       return false;
     }
 
-    var isMobile = window.innerWidth < 768;
+    return true;
+  }
 
-    if (
-      settings.audienceDevice === "mobile" &&
-      !isMobile
-    ) {
-      return false;
+  function currentDevice() {
+    var width =
+      window.innerWidth ||
+      (document.documentElement || {}).clientWidth ||
+      0;
+
+    if (width < 768) {
+      return "mobile";
     }
 
+    if (width < 1024) {
+      return "tablet";
+    }
+
+    return "desktop";
+  }
+
+  function matchesDevices(campaign) {
+    var devices = campaign.devices;
+
     if (
-      settings.audienceDevice === "desktop" &&
-      isMobile
+      !devices ||
+      !devices.length ||
+      devices.length === 3
     ) {
-      return false;
+      return true;
+    }
+
+    return (
+      devices.indexOf(currentDevice()) !== -1
+    );
+  }
+
+  function viewCount(campaignId) {
+    return (
+      Number(
+        safeGet("mq_views_" + campaignId),
+      ) || 0
+    );
+  }
+
+  function markViewed(campaignId) {
+    safeSet(
+      "mq_views_" + campaignId,
+      String(viewCount(campaignId) + 1),
+    );
+  }
+
+  function withinFrequencyCap(campaign) {
+    var seen = viewCount(campaign.campaignId);
+
+    if (campaign.frequencyMode === "once") {
+      return seen < 1;
+    }
+
+    if (campaign.frequencyMode === "limited") {
+      var limit =
+        Number(campaign.frequencyLimit) || 0;
+
+      return limit > 0 && seen < limit;
     }
 
     return true;
   }
 
-  function dismissedRecently(campaignId) {
-    try {
-      var raw = window.localStorage.getItem(
-        "mq_dismissed_" + campaignId,
-      );
-      if (!raw) {
-        return false;
-      }
-      var dismissedAt = Number(raw);
-      var dayMs = 24 * 60 * 60 * 1000;
-      return Date.now() - dismissedAt < dayMs;
-    } catch (error) {
+  /* 0 days means never show it to this visitor again, anything
+     higher is a waiting period. */
+
+  function blockedSince(key, days) {
+    var raw = safeGet(key);
+
+    if (!raw) {
       return false;
     }
+
+    var at = Number(raw);
+
+    if (!at) {
+      return false;
+    }
+
+    if (days <= 0) {
+      return true;
+    }
+
+    return (
+      Date.now() - at <
+      days * 24 * 60 * 60 * 1000
+    );
+  }
+
+  function collectedBlocks(campaign) {
+    return blockedSince(
+      "mq_collected_" + campaign.campaignId,
+      Number(campaign.reshowCollectedDays) || 0,
+    );
+  }
+
+  function markCollected(campaignId) {
+    safeSet(
+      "mq_collected_" + campaignId,
+      String(Date.now()),
+    );
+  }
+
+  function dismissedBlocks(campaign) {
+    return blockedSince(
+      "mq_dismissed_" + campaign.campaignId,
+      Number(campaign.reshowDismissedDays) || 0,
+    );
   }
 
   function markDismissed(campaignId) {
-    try {
-      window.localStorage.setItem(
-        "mq_dismissed_" + campaignId,
-        String(Date.now()),
-      );
-    } catch (error) {
-      /* localStorage unavailable */
-    }
+    safeSet(
+      "mq_dismissed_" + campaignId,
+      String(Date.now()),
+    );
   }
 
   /* Deliberately no "already submitted" memory here: a past
@@ -390,6 +488,11 @@
   }
 
   function buildWidget(campaign) {
+    /* Counted once per page load, the moment the campaign is
+       chosen — that is what "shown to this visitor" means for a
+       frequency cap. */
+    markViewed(campaign.campaignId);
+
     var settings = popupSettingsFor(campaign.steps);
     var overlay = null;
 
@@ -648,6 +751,9 @@
         values,
         emailValue,
         function () {
+          /* They gave us their details, so the "if collected"
+             cooldown starts now. */
+          markCollected(campaign.campaignId);
           showStep("success");
         },
       );
@@ -761,7 +867,19 @@
           continue;
         }
 
-        if (dismissedRecently(campaign.campaignId)) {
+        if (!matchesDevices(campaign)) {
+          continue;
+        }
+
+        if (!withinFrequencyCap(campaign)) {
+          continue;
+        }
+
+        if (collectedBlocks(campaign)) {
+          continue;
+        }
+
+        if (dismissedBlocks(campaign)) {
           continue;
         }
 

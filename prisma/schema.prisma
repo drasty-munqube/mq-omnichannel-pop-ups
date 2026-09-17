@@ -54,6 +54,24 @@ model Campaign {
   pageTargets          Json
   siteTargetMode       String   @default("all")
   siteTargets          Json     @default("[]")
+
+  // How often one visitor may see this campaign.
+  // "unlimited" (default), "once", or "limited" with frequencyLimit.
+  frequencyMode        String   @default("unlimited")
+  frequencyLimit       Int      @default(3)
+
+  // Days before the popup may return to the same visitor after they
+  // submit or close it. 0 means never show it to them again.
+  // reshowDismissedDays defaults to 1, which is the cooldown the
+  // widget used to hardcode.
+  reshowCollectedDays  Int      @default(0)
+  reshowDismissedDays  Int      @default(1)
+
+  // Which device widths may see it: any of "desktop", "tablet",
+  // "mobile". All three by default, so existing campaigns are
+  // unaffected.
+  devices              Json     @default("[\"desktop\", \"tablet\", \"mobile\"]")
+
   reward               String
   rewardDiscountId     String?
   rewardDiscountCode   String?

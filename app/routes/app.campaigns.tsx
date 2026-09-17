@@ -600,6 +600,94 @@ export async function action({
       siteTargets = [];
     }
 
+    /* HOW OFTEN, AND ON WHAT
+
+       All of these are clamped rather than rejected: a nonsense
+       number in the form should land on a sane value, not block
+       the merchant from saving their campaign. */
+
+    const frequencyModeRaw = String(
+      formData.get("frequencyMode") || "unlimited",
+    ).trim();
+
+    const frequencyMode = [
+      "once",
+      "limited",
+    ].includes(frequencyModeRaw)
+      ? frequencyModeRaw
+      : "unlimited";
+
+    const frequencyLimit = Math.min(
+      50,
+      Math.max(
+        1,
+        Number(formData.get("frequencyLimit")) ||
+          3,
+      ),
+    );
+
+    const reshowCollectedDays = Math.min(
+      365,
+      Math.max(
+        0,
+        Math.floor(
+          Number(
+            formData.get(
+              "reshowCollectedDays",
+            ),
+          ) || 0,
+        ),
+      ),
+    );
+
+    const reshowDismissedDays = Math.min(
+      365,
+      Math.max(
+        0,
+        Math.floor(
+          Number(
+            formData.get(
+              "reshowDismissedDays",
+            ),
+          ) || 0,
+        ),
+      ),
+    );
+
+    const ALLOWED_DEVICES = [
+      "desktop",
+      "tablet",
+      "mobile",
+    ];
+
+    let devices: string[] = ALLOWED_DEVICES;
+
+    try {
+      const parsed = JSON.parse(
+        String(
+          formData.get("devices") || "[]",
+        ),
+      );
+
+      const cleaned = Array.isArray(parsed)
+        ? parsed
+            .map((value) => String(value))
+            .filter((value) =>
+              ALLOWED_DEVICES.includes(value),
+            )
+        : [];
+
+      /* Empty means the merchant unticked everything, which
+         would hide the campaign from every visitor. Treat it as
+         no device targeting instead. */
+      devices =
+        cleaned.length > 0
+          ? cleaned
+          : ALLOWED_DEVICES;
+    } catch {
+      devices = ALLOWED_DEVICES;
+    }
+
     /* SERVER-SIDE VALIDATION */
 
     if (name.length < 3 || name.length > 60) {
@@ -725,6 +813,11 @@ export async function action({
       pageTargets: pageTargets as any,
       siteTargetMode,
       siteTargets: siteTargets as any,
+      frequencyMode,
+      frequencyLimit,
+      reshowCollectedDays,
+      reshowDismissedDays,
+      devices: devices as any,
       reward,
       rewardDiscountId:
         rewardDiscountId || null,
@@ -905,7 +998,7 @@ export default function Campaigns() {
 
   const [wizardStep, setWizardStep] = useState(1);
 
-  const totalSteps = 6;
+  const totalSteps = 7;
 
   /* =========================================================
      CAMPAIGN DATA
@@ -994,6 +1087,54 @@ export default function Campaigns() {
     );
 
     clearError("siteTargets");
+  };
+
+  /* =========================================================
+     FREQUENCY AND DEVICES
+
+     How often one visitor may see this campaign, how long to
+     wait before showing it again once they act on it, and which
+     screen widths it is allowed on.
+  ========================================================= */
+
+  const [frequencyMode, setFrequencyMode] =
+    useState<
+      "unlimited" | "once" | "limited"
+    >("unlimited");
+
+  const [frequencyLimit, setFrequencyLimit] =
+    useState(3);
+
+  const [
+    reshowCollectedDays,
+    setReshowCollectedDays,
+  ] = useState(0);
+
+  const [
+    reshowDismissedDays,
+    setReshowDismissedDays,
+  ] = useState(1);
+
+  const ALL_DEVICES = [
+    "desktop",
+    "tablet",
+    "mobile",
+  ];
+
+  const [devices, setDevices] = useState<
+    string[]
+  >(ALL_DEVICES);
+
+  const toggleDevice = (value: string) => {
+    setDevices((current) =>
+      current.includes(value)
+        ? current.filter(
+            (item) => item !== value,
+          )
+        : [...current, value],
+    );
+
+    clearError("devices");
   };
 
   /* =========================================================
@@ -1134,6 +1275,11 @@ export default function Campaigns() {
     setPageTargets([]);
     setSiteTargetMode("all");
     setSiteTargets([]);
+    setFrequencyMode("unlimited");
+    setFrequencyLimit(3);
+    setReshowCollectedDays(0);
+    setReshowDismissedDays(1);
+    setDevices(ALL_DEVICES);
     setPopupSearch("");
     setPopupPage(1);
     setErrors({});
@@ -1204,6 +1350,28 @@ export default function Campaigns() {
       Array.isArray(campaign.siteTargets)
         ? (campaign.siteTargets as string[])
         : [],
+    );
+    setFrequencyMode(
+      campaign.frequencyMode === "once" ||
+        campaign.frequencyMode === "limited"
+        ? campaign.frequencyMode
+        : "unlimited",
+    );
+    setFrequencyLimit(
+      campaign.frequencyLimit || 3,
+    );
+    setReshowCollectedDays(
+      campaign.reshowCollectedDays ?? 0,
+    );
+    setReshowDismissedDays(
+      campaign.reshowDismissedDays ?? 1,
+    );
+    setDevices(
+      Array.isArray(campaign.devices) &&
+        (campaign.devices as string[]).length >
+          0
+        ? (campaign.devices as string[])
+        : ALL_DEVICES,
     );
     setPopupSearch("");
     setPopupPage(1);
@@ -1360,6 +1528,26 @@ export default function Campaigns() {
           : [],
       ),
     );
+    formData.append(
+      "frequencyMode",
+      frequencyMode,
+    );
+    formData.append(
+      "frequencyLimit",
+      String(frequencyLimit),
+    );
+    formData.append(
+      "reshowCollectedDays",
+      String(reshowCollectedDays),
+    );
+    formData.append(
+      "reshowDismissedDays",
+      String(reshowDismissedDays),
+    );
+    formData.append(
+      "devices",
+      JSON.stringify(devices),
+    );
 
     submit(formData, { method: "post" });
   };
@@ -1502,16 +1690,31 @@ export default function Campaigns() {
           "Select at least one page, or switch to all pages.";
       }
 
+      if (devices.length === 0) {
+        stepErrors.devices =
+          "Choose at least one device, otherwise nobody can see this campaign.";
+      }
+
       if (
-        siteTargetMode === "selected" &&
-        siteTargets.length === 0
+        frequencyMode === "limited" &&
+        (frequencyLimit < 1 ||
+          frequencyLimit > 50)
       ) {
-        stepErrors.siteTargets =
-          "Select at least one website, or switch to all websites.";
+        stepErrors.frequencyLimit =
+          "Enter a number between 1 and 50.";
       }
     }
 
-    if (step === 5 && !selectedReward) {
+    if (
+      step === 5 &&
+      siteTargetMode === "selected" &&
+      siteTargets.length === 0
+    ) {
+      stepErrors.siteTargets =
+        "Select at least one website, or switch to all websites.";
+    }
+
+    if (step === 6 && !selectedReward) {
       stepErrors.selectedReward =
         "Please choose a reward option.";
     }
@@ -1540,9 +1743,16 @@ export default function Campaigns() {
       return;
     }
 
-    /* FINAL STEP — VALIDATE EVERYTHING */
+    /* FINAL STEP — VALIDATE EVERYTHING
 
-    for (let step = 1; step <= 5; step += 1) {
+       Bounded by totalSteps rather than a literal so adding a
+       step to the wizard cannot silently skip its validation. */
+
+    for (
+      let step = 1;
+      step < totalSteps;
+      step += 1
+    ) {
       const stepErrors = validateStep(step);
 
       if (
@@ -3366,6 +3576,7 @@ export default function Campaigns() {
                   "Audience",
                   "Popup",
                   "Trigger",
+                  "Websites",
                   "Reward",
                   "Review",
                 ].map((name, index) => {
@@ -5110,13 +5321,13 @@ export default function Campaigns() {
                   </div>
 
                   {/* =============================================
-                      WHICH WEBSITES?
+                      HOW OFTEN?
 
-                      Page targeting above is about where inside
-                      a storefront the popup shows. This is about
-                      which website it shows on at all, which
-                      starts to matter the moment the embed
-                      snippet is on more than one site.
+                      Counted per visitor in their own browser's
+                      local storage, so clearing site data resets
+                      it. That caveat is stated in the UI rather
+                      than hidden, because merchants will
+                      otherwise read the cap as a guarantee.
                   ============================================= */}
 
                   <div
@@ -5134,7 +5345,7 @@ export default function Campaigns() {
                         color: "#172033",
                       }}
                     >
-                      Which websites?
+                      How often should it show?
                     </h2>
 
                     <p
@@ -5144,13 +5355,9 @@ export default function Campaigns() {
                         fontSize: "14px",
                       }}
                     >
-                      Your storefront and every website
-                      carrying the embed snippet can run
-                      this campaign. Narrow it down if it
-                      belongs on only some of them.
+                      Limit how many times the same
+                      visitor sees this campaign.
                     </p>
-
-                    {/* MODE TOGGLE */}
 
                     <div
                       style={{
@@ -5162,15 +5369,21 @@ export default function Campaigns() {
                       {(
                         [
                           {
-                            value: "all" as const,
-                            label: "All websites",
-                            text: "Run anywhere the snippet is installed.",
+                            value:
+                              "unlimited" as const,
+                            label: "No limit",
+                            text: "Show it every time the trigger fires.",
+                          },
+                          {
+                            value: "once" as const,
+                            label: "Only once",
+                            text: "Show it a single time per visitor.",
                           },
                           {
                             value:
-                              "selected" as const,
-                            label: "Selected websites",
-                            text: "Choose exactly which sites run it.",
+                              "limited" as const,
+                            label: "A set number",
+                            text: "Show it up to a chosen number of times.",
                           },
                         ]
                       ).map((mode) => (
@@ -5178,11 +5391,11 @@ export default function Campaigns() {
                           key={mode.value}
                           type="button"
                           onClick={() => {
-                            setSiteTargetMode(
+                            setFrequencyMode(
                               mode.value,
                             );
                             clearError(
-                              "siteTargets",
+                              "frequencyLimit",
                             );
                           }}
                           style={{
@@ -5190,12 +5403,12 @@ export default function Campaigns() {
                             textAlign: "left",
                             padding: "15px 18px",
                             background:
-                              siteTargetMode ===
+                              frequencyMode ===
                               mode.value
                                 ? "#F3F7FB"
                                 : "#FFFFFF",
                             border:
-                              siteTargetMode ===
+                              frequencyMode ===
                               mode.value
                                 ? "2px solid #0B3D66"
                                 : "1px solid #DCE3EA",
@@ -5227,139 +5440,316 @@ export default function Campaigns() {
                       ))}
                     </div>
 
-                    {siteTargetMode ===
-                      "selected" && (
+                    {frequencyMode ===
+                      "limited" && (
                       <div
-                        style={{ marginTop: "20px" }}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "10px",
+                          marginTop: "16px",
+                          fontSize: "14px",
+                          color: "#172033",
+                        }}
                       >
+                        <span>Show it up to</span>
 
-                        {sites.length === 0 ? (
-                          <div
-                            style={{
-                              padding: "14px 16px",
-                              fontSize: "13px",
-                              color: "#6B7280",
-                              background: "#F8FAFC",
-                              border:
-                                "1px solid #E7EBEF",
-                              borderRadius: "9px",
-                            }}
-                          >
-                            No websites yet. Add one
-                            under Websites in the left
-                            menu, then come back here.
-                          </div>
-                        ) : (
-                          <div
-                            style={{
-                              display: "grid",
-                              gridTemplateColumns:
-                                "repeat(auto-fit, minmax(240px, 1fr))",
-                              gap: "10px",
-                            }}
-                          >
-                            {sites.map((site) => {
-                              const checked =
-                                siteTargets.includes(
-                                  site.id,
-                                );
+                        <input
+                          type="number"
+                          min={1}
+                          max={50}
+                          value={frequencyLimit}
+                          onChange={(event) => {
+                            setFrequencyLimit(
+                              Number(
+                                event.target
+                                  .value,
+                              ),
+                            );
+                            clearError(
+                              "frequencyLimit",
+                            );
+                          }}
+                          style={{
+                            width: "84px",
+                            padding: "9px 10px",
+                            fontSize: "14px",
+                            border:
+                              "1px solid #DCE3EA",
+                            borderRadius: "8px",
+                          }}
+                        />
 
-                              return (
-                                <label
-                                  key={site.id}
-                                  style={{
-                                    display: "flex",
-                                    alignItems:
-                                      "flex-start",
-                                    gap: "10px",
-                                    padding:
-                                      "12px 14px",
-                                    background: checked
-                                      ? "#F3F7FB"
-                                      : "#FFFFFF",
-                                    border: checked
-                                      ? "2px solid #0B3D66"
-                                      : "1px solid #DCE3EA",
-                                    borderRadius: "9px",
-                                    cursor: "pointer",
-                                  }}
-                                >
-                                  <input
-                                    type="checkbox"
-                                    checked={checked}
-                                    onChange={() =>
-                                      toggleSiteTarget(
-                                        site.id,
-                                      )
-                                    }
-                                    style={{
-                                      marginTop: "2px",
-                                    }}
-                                  />
-
-                                  <span
-                                    style={{
-                                      minWidth: 0,
-                                    }}
-                                  >
-                                    <span
-                                      style={{
-                                        display:
-                                          "block",
-                                        fontSize:
-                                          "13px",
-                                        color:
-                                          "#172033",
-                                        fontWeight: 600,
-                                      }}
-                                    >
-                                      {site.name}
-                                    </span>
-
-                                    <span
-                                      style={{
-                                        display:
-                                          "block",
-                                        fontSize:
-                                          "11px",
-                                        color:
-                                          "#9AA4B2",
-                                        wordBreak:
-                                          "break-all",
-                                      }}
-                                    >
-                                      {site.kind ===
-                                      "shopify"
-                                        ? "Shopify storefront"
-                                        : site.domain}
-                                    </span>
-                                  </span>
-                                </label>
-                              );
-                            })}
-                          </div>
-                        )}
-
-                        {renderError("siteTargets")}
-
-                        {siteTargets.length > 0 && (
-                          <div
-                            style={{
-                              marginTop: "12px",
-                              fontSize: "12px",
-                              color: "#6B7280",
-                            }}
-                          >
-                            {siteTargets.length} website
-                            {siteTargets.length === 1
-                              ? ""
-                              : "s"}{" "}
-                            selected
-                          </div>
-                        )}
-
+                        <span>
+                          times per visitor
+                        </span>
                       </div>
                     )}
+
+                    {renderError("frequencyLimit")}
+
+                    {/* COOLDOWNS */}
+
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns:
+                          "repeat(auto-fit, minmax(260px, 1fr))",
+                        gap: "14px",
+                        marginTop: "22px",
+                      }}
+                    >
+                      {(
+                        [
+                          {
+                            key: "collected" as const,
+                            label:
+                              "After they submit",
+                            value:
+                              reshowCollectedDays,
+                            set: setReshowCollectedDays,
+                          },
+                          {
+                            key: "dismissed" as const,
+                            label:
+                              "After they close it",
+                            value:
+                              reshowDismissedDays,
+                            set: setReshowDismissedDays,
+                          },
+                        ]
+                      ).map((field) => (
+                        <div
+                          key={field.key}
+                          style={{
+                            padding: "14px 16px",
+                            border:
+                              "1px solid #DCE3EA",
+                            borderRadius: "9px",
+                          }}
+                        >
+                          <div
+                            style={{
+                              fontSize: "13px",
+                              fontWeight: 600,
+                              color: "#172033",
+                              marginBottom: "8px",
+                            }}
+                          >
+                            {field.label}
+                          </div>
+
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems:
+                                "center",
+                              gap: "8px",
+                              fontSize: "13px",
+                              color: "#6B7280",
+                            }}
+                          >
+                            <span>
+                              show again after
+                            </span>
+
+                            <input
+                              type="number"
+                              min={0}
+                              max={365}
+                              value={field.value}
+                              onChange={(event) =>
+                                field.set(
+                                  Number(
+                                    event.target
+                                      .value,
+                                  ),
+                                )
+                              }
+                              style={{
+                                width: "72px",
+                                padding:
+                                  "8px 10px",
+                                fontSize: "13px",
+                                border:
+                                  "1px solid #DCE3EA",
+                                borderRadius:
+                                  "8px",
+                              }}
+                            />
+
+                            <span>days</span>
+                          </div>
+
+                          <div
+                            style={{
+                              marginTop: "8px",
+                              fontSize: "11px",
+                              color: "#9AA4B2",
+                            }}
+                          >
+                            {field.value <= 0
+                              ? "0 means never show it to them again."
+                              : `They will not see it again for ${field.value} day${
+                                  field.value ===
+                                  1
+                                    ? ""
+                                    : "s"
+                                }.`}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <p
+                      style={{
+                        marginTop: "14px",
+                        fontSize: "11px",
+                        color: "#9AA4B2",
+                      }}
+                    >
+                      These counts live in each
+                      visitor's own browser storage. If
+                      someone clears their site data or
+                      switches device, they start
+                      fresh.
+                    </p>
+
+                  </div>
+
+                  {/* =============================================
+                      DEVICES
+                  ============================================= */}
+
+                  <div
+                    style={{
+                      marginTop: "36px",
+                      paddingTop: "28px",
+                      borderTop: "1px solid #E7EBEF",
+                    }}
+                  >
+
+                    <h2
+                      style={{
+                        margin: "0 0 8px",
+                        fontSize: "24px",
+                        color: "#172033",
+                      }}
+                    >
+                      Devices
+                    </h2>
+
+                    <p
+                      style={{
+                        margin: 0,
+                        color: "#6B7280",
+                        fontSize: "14px",
+                      }}
+                    >
+                      Pick the screen sizes this
+                      campaign is allowed on.
+                    </p>
+
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns:
+                          "repeat(auto-fit, minmax(220px, 1fr))",
+                        gap: "10px",
+                        marginTop: "20px",
+                      }}
+                    >
+                      {(
+                        [
+                          {
+                            value: "desktop",
+                            label:
+                              "Desktop browsers",
+                            hint: "1024px and wider",
+                          },
+                          {
+                            value: "tablet",
+                            label:
+                              "Tablet browsers",
+                            hint: "768px to 1023px",
+                          },
+                          {
+                            value: "mobile",
+                            label:
+                              "Mobile browsers",
+                            hint: "Under 768px",
+                          },
+                        ]
+                      ).map((device) => {
+                        const checked =
+                          devices.includes(
+                            device.value,
+                          );
+
+                        return (
+                          <label
+                            key={device.value}
+                            style={{
+                              display: "flex",
+                              alignItems:
+                                "flex-start",
+                              gap: "10px",
+                              padding: "12px 14px",
+                              background: checked
+                                ? "#F3F7FB"
+                                : "#FFFFFF",
+                              border: checked
+                                ? "2px solid #0B3D66"
+                                : "1px solid #DCE3EA",
+                              borderRadius: "9px",
+                              cursor: "pointer",
+                            }}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={() =>
+                                toggleDevice(
+                                  device.value,
+                                )
+                              }
+                              style={{
+                                marginTop: "2px",
+                              }}
+                            />
+
+                            <span>
+                              <span
+                                style={{
+                                  display:
+                                    "block",
+                                  fontSize:
+                                    "13px",
+                                  color: "#172033",
+                                  fontWeight: 600,
+                                }}
+                              >
+                                {device.label}
+                              </span>
+
+                              <span
+                                style={{
+                                  display:
+                                    "block",
+                                  fontSize:
+                                    "11px",
+                                  color: "#9AA4B2",
+                                }}
+                              >
+                                {device.hint}
+                              </span>
+                            </span>
+                          </label>
+                        );
+                      })}
+                    </div>
+
+                    {renderError("devices")}
 
                   </div>
 
@@ -5370,6 +5760,12 @@ export default function Campaigns() {
 
               {/* =================================================
                   STEP 5
+
+                  Page targeting in step 4 is about where inside
+                  a storefront a popup shows. This step is about
+                  which website it shows on at all, which starts
+                  to matter the moment the embed snippet is on
+                  more than one site.
               ================================================= */}
 
               {wizardStep === 5 && (
@@ -5388,7 +5784,266 @@ export default function Campaigns() {
                       fontWeight: 700,
                     }}
                   >
-                    STEP 5 · REWARD
+                    STEP 5 · WEBSITES
+                  </div>
+
+                  <h2
+                    style={{
+                      margin: "10px 0 8px",
+                      fontSize: "28px",
+                      color: "#172033",
+                    }}
+                  >
+                    Which websites?
+                  </h2>
+
+                  <p
+                    style={{
+                      margin: 0,
+                      color: "#6B7280",
+                      fontSize: "14px",
+                    }}
+                  >
+                    Your storefront and every website
+                    carrying the embed snippet can run this
+                    campaign. Narrow it down if it belongs
+                    on only some of them.
+                  </p>
+
+                  {/* MODE TOGGLE */}
+
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: "10px",
+                      marginTop: "24px",
+                    }}
+                  >
+                    {(
+                      [
+                        {
+                          value: "all" as const,
+                          label: "All websites",
+                          text: "Run anywhere the snippet is installed.",
+                        },
+                        {
+                          value: "selected" as const,
+                          label: "Selected websites",
+                          text: "Choose exactly which sites run it.",
+                        },
+                      ]
+                    ).map((mode) => (
+                      <button
+                        key={mode.value}
+                        type="button"
+                        onClick={() => {
+                          setSiteTargetMode(
+                            mode.value,
+                          );
+                          clearError("siteTargets");
+                        }}
+                        style={{
+                          flex: 1,
+                          textAlign: "left",
+                          padding: "15px 18px",
+                          background:
+                            siteTargetMode ===
+                            mode.value
+                              ? "#F3F7FB"
+                              : "#FFFFFF",
+                          border:
+                            siteTargetMode ===
+                            mode.value
+                              ? "2px solid #0B3D66"
+                              : "1px solid #DCE3EA",
+                          borderRadius: "9px",
+                          cursor: "pointer",
+                        }}
+                      >
+                        <strong
+                          style={{
+                            display: "block",
+                            color: "#172033",
+                            fontSize: "14px",
+                          }}
+                        >
+                          {mode.label}
+                        </strong>
+
+                        <span
+                          style={{
+                            display: "block",
+                            marginTop: "4px",
+                            fontSize: "12px",
+                            color: "#6B7280",
+                          }}
+                        >
+                          {mode.text}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+
+                  {siteTargetMode === "selected" && (
+                    <div style={{ marginTop: "24px" }}>
+
+                      {sites.length === 0 ? (
+                        <div
+                          style={{
+                            padding: "14px 16px",
+                            fontSize: "13px",
+                            color: "#6B7280",
+                            background: "#F8FAFC",
+                            border: "1px solid #E7EBEF",
+                            borderRadius: "9px",
+                          }}
+                        >
+                          No websites yet. Add one under
+                          Websites in the left menu, then
+                          come back here.
+                        </div>
+                      ) : (
+                        <div
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns:
+                              "repeat(auto-fit, minmax(240px, 1fr))",
+                            gap: "10px",
+                          }}
+                        >
+                          {sites.map((site) => {
+                            const checked =
+                              siteTargets.includes(
+                                site.id,
+                              );
+
+                            return (
+                              <label
+                                key={site.id}
+                                style={{
+                                  display: "flex",
+                                  alignItems:
+                                    "flex-start",
+                                  gap: "10px",
+                                  padding: "12px 14px",
+                                  background: checked
+                                    ? "#F3F7FB"
+                                    : "#FFFFFF",
+                                  border: checked
+                                    ? "2px solid #0B3D66"
+                                    : "1px solid #DCE3EA",
+                                  borderRadius: "9px",
+                                  cursor: "pointer",
+                                }}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  onChange={() =>
+                                    toggleSiteTarget(
+                                      site.id,
+                                    )
+                                  }
+                                  style={{
+                                    marginTop: "2px",
+                                  }}
+                                />
+
+                                <span
+                                  style={{ minWidth: 0 }}
+                                >
+                                  <span
+                                    style={{
+                                      display: "block",
+                                      fontSize: "13px",
+                                      color: "#172033",
+                                      fontWeight: 600,
+                                    }}
+                                  >
+                                    {site.name}
+                                  </span>
+
+                                  <span
+                                    style={{
+                                      display: "block",
+                                      fontSize: "11px",
+                                      color: "#9AA4B2",
+                                      wordBreak:
+                                        "break-all",
+                                    }}
+                                  >
+                                    {site.kind ===
+                                    "shopify"
+                                      ? "Shopify storefront"
+                                      : site.domain}
+                                  </span>
+                                </span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {renderError("siteTargets")}
+
+                      {siteTargets.length > 0 && (
+                        <div
+                          style={{
+                            marginTop: "12px",
+                            fontSize: "12px",
+                            color: "#6B7280",
+                          }}
+                        >
+                          {siteTargets.length} website
+                          {siteTargets.length === 1
+                            ? ""
+                            : "s"}{" "}
+                          selected
+                        </div>
+                      )}
+
+                    </div>
+                  )}
+
+                  <p
+                    style={{
+                      marginTop: "24px",
+                      fontSize: "12px",
+                      color: "#9AA4B2",
+                    }}
+                  >
+                    Websites are added and removed under
+                    Websites in the left menu. Any site
+                    where the snippet is installed shows
+                    up there on its own.
+                  </p>
+
+                </div>
+
+              )}
+
+
+              {/* =================================================
+                  STEP 6
+              ================================================= */}
+
+              {wizardStep === 6 && (
+
+                <div
+                  style={{
+                    maxWidth: "1040px",
+                    margin: "0 auto",
+                  }}
+                >
+
+                  <div
+                    style={{
+                      color: "#7651D8",
+                      fontSize: "11px",
+                      fontWeight: 700,
+                    }}
+                  >
+                    STEP 6 · REWARD
                   </div>
 
                   <h2
@@ -5738,10 +6393,10 @@ export default function Campaigns() {
 
 
               {/* =================================================
-                  STEP 6
+                  STEP 7
               ================================================= */}
 
-              {wizardStep === 6 && (
+              {wizardStep === 7 && (
 
                 <div
                   style={{
@@ -5757,7 +6412,7 @@ export default function Campaigns() {
                       fontWeight: 700,
                     }}
                   >
-                    STEP 6 · REVIEW
+                    STEP 7 · REVIEW
                   </div>
 
                   <h2
@@ -6073,6 +6728,83 @@ export default function Campaigns() {
                                 .join(", ")}
                             </span>
                           )}
+                      </div>
+
+                      <div>
+                        <span
+                          style={{
+                            display: "block",
+                            fontSize: "11px",
+                            color: "#9AA4B2",
+                            marginBottom: "4px",
+                          }}
+                        >
+                          FREQUENCY
+                        </span>
+
+                        <strong
+                          style={{
+                            color: "#172033",
+                            fontSize: "14px",
+                          }}
+                        >
+                          {frequencyMode === "once"
+                            ? "Once per visitor"
+                            : frequencyMode ===
+                                "limited"
+                              ? `Up to ${frequencyLimit} times per visitor`
+                              : "No limit"}
+                        </strong>
+
+                        <span
+                          style={{
+                            display: "block",
+                            marginTop: "4px",
+                            fontSize: "11px",
+                            color: "#9AA4B2",
+                          }}
+                        >
+                          {reshowCollectedDays <= 0
+                            ? "Never again after they submit"
+                            : `Again ${reshowCollectedDays}d after they submit`}
+                          {" · "}
+                          {reshowDismissedDays <= 0
+                            ? "never again after they close it"
+                            : `${reshowDismissedDays}d after they close it`}
+                        </span>
+                      </div>
+
+                      <div>
+                        <span
+                          style={{
+                            display: "block",
+                            fontSize: "11px",
+                            color: "#9AA4B2",
+                            marginBottom: "4px",
+                          }}
+                        >
+                          DEVICES
+                        </span>
+
+                        <strong
+                          style={{
+                            color: "#172033",
+                            fontSize: "14px",
+                          }}
+                        >
+                          {devices.length === 3
+                            ? "All devices"
+                            : devices
+                                .map(
+                                  (device) =>
+                                    device
+                                      .charAt(0)
+                                      .toUpperCase() +
+                                    device.slice(1),
+                                )
+                                .join(", ") ||
+                              "None selected"}
+                        </strong>
                       </div>
 
                     </div>

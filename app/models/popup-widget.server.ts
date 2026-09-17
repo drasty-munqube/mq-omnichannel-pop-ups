@@ -19,8 +19,42 @@ export type EligibleCampaign = {
   triggerScrollPercent: number;
   pageTargetMode: string;
   pageTargets: unknown;
+  frequencyMode: string;
+  frequencyLimit: number;
+  reshowCollectedDays: number;
+  reshowDismissedDays: number;
+  devices: unknown;
   steps: unknown;
 };
+
+/* ------------------------------------------------------------
+   Device buckets are stored as an array so a campaign can name
+   any combination. Anything unreadable falls back to all three,
+   which is the same as no device targeting at all — a broken
+   value should never silently hide a campaign everywhere.
+   ------------------------------------------------------------ */
+
+const ALL_DEVICES = [
+  "desktop",
+  "tablet",
+  "mobile",
+];
+
+function normalizeDevices(value: unknown) {
+  if (!Array.isArray(value)) {
+    return ALL_DEVICES;
+  }
+
+  const devices = value
+    .map((item) => String(item))
+    .filter((item) =>
+      ALL_DEVICES.includes(item),
+    );
+
+  return devices.length > 0
+    ? devices
+    : ALL_DEVICES;
+}
 
 /* ------------------------------------------------------------
    Does this campaign belong on the website asking for it?
@@ -119,6 +153,15 @@ export async function getEligibleCampaigns(
         )
           ? campaign.pageTargets
           : [],
+        frequencyMode: campaign.frequencyMode,
+        frequencyLimit: campaign.frequencyLimit,
+        reshowCollectedDays:
+          campaign.reshowCollectedDays,
+        reshowDismissedDays:
+          campaign.reshowDismissedDays,
+        devices: normalizeDevices(
+          campaign.devices,
+        ),
         steps: popup.steps,
       };
     });

@@ -106,6 +106,10 @@
     safeSet(STORAGE_PREFIX + "seen", "1");
   }
 
+  /* New-vs-returning still lives on the popup. Device targeting
+     used to live here too and no longer does — it is a campaign
+     setting now, handled by matchesDevices below. */
+
   function matchesAudience(settings) {
     var returning = isReturningVisitor();
 
@@ -117,28 +121,149 @@
       return false;
     }
 
-    var isMobile = window.innerWidth < 768;
+    return true;
+  }
 
-    if (settings.audienceDevice === "mobile" && !isMobile) {
-      return false;
+  /* ----------------------------------------------------------
+     DEVICE
+
+     Width buckets rather than user-agent sniffing: what decides
+     whether a popup fits is how much room it has, and a resized
+     desktop window should behave like the size it actually is.
+     ---------------------------------------------------------- */
+
+  function currentDevice() {
+    var width =
+      window.innerWidth ||
+      (document.documentElement || {}).clientWidth ||
+      0;
+
+    if (width < 768) {
+      return "mobile";
     }
 
-    if (settings.audienceDevice === "desktop" && isMobile) {
-      return false;
+    if (width < 1024) {
+      return "tablet";
+    }
+
+    return "desktop";
+  }
+
+  function matchesDevices(campaign) {
+    var devices = campaign.devices;
+
+    /* Missing or empty means no device targeting at all, which
+       is every device — never nothing. */
+    if (
+      !devices ||
+      !devices.length ||
+      devices.length === 3
+    ) {
+      return true;
+    }
+
+    return (
+      devices.indexOf(currentDevice()) !== -1
+    );
+  }
+
+  /* ----------------------------------------------------------
+     FREQUENCY
+
+     How many times this visitor has already been shown the
+     campaign, counted in this browser only. Clearing site data
+     resets it, which is the same caveat every frontend
+     frequency cap carries.
+     ---------------------------------------------------------- */
+
+  function viewCount(campaignId) {
+    return (
+      Number(
+        safeGet(
+          STORAGE_PREFIX + "views_" + campaignId,
+        ),
+      ) || 0
+    );
+  }
+
+  function markViewed(campaignId) {
+    safeSet(
+      STORAGE_PREFIX + "views_" + campaignId,
+      String(viewCount(campaignId) + 1),
+    );
+  }
+
+  function withinFrequencyCap(campaign) {
+    var seen = viewCount(campaign.campaignId);
+
+    if (campaign.frequencyMode === "once") {
+      return seen < 1;
+    }
+
+    if (campaign.frequencyMode === "limited") {
+      var limit =
+        Number(campaign.frequencyLimit) || 0;
+
+      return limit > 0 && seen < limit;
     }
 
     return true;
   }
 
-  function dismissedRecently(campaignId) {
-    var raw = safeGet(
-      STORAGE_PREFIX + "dismissed_" + campaignId,
-    );
+  /* ----------------------------------------------------------
+     COOLDOWNS
+
+     One rule for both "they submitted" and "they closed it":
+     0 days means never show it to this visitor again, anything
+     higher is a waiting period.
+     ---------------------------------------------------------- */
+
+  function blockedSince(key, days) {
+    var raw = safeGet(key);
+
     if (!raw) {
       return false;
     }
-    var dayMs = 24 * 60 * 60 * 1000;
-    return Date.now() - Number(raw) < dayMs;
+
+    var at = Number(raw);
+
+    if (!at) {
+      return false;
+    }
+
+    if (days <= 0) {
+      return true;
+    }
+
+    return (
+      Date.now() - at <
+      days * 24 * 60 * 60 * 1000
+    );
+  }
+
+  function collectedBlocks(campaign) {
+    return blockedSince(
+      STORAGE_PREFIX +
+        "collected_" +
+        campaign.campaignId,
+      Number(campaign.reshowCollectedDays) || 0,
+    );
+  }
+
+  function markCollected(campaignId) {
+    safeSet(
+      STORAGE_PREFIX + "collected_" + campaignId,
+      String(Date.now()),
+    );
+  }
+
+  function dismissedBlocks(campaign) {
+    return blockedSince(
+      STORAGE_PREFIX +
+        "dismissed_" +
+        campaign.campaignId,
+      Number(campaign.reshowDismissedDays) || 0,
+    );
   }
 
   function markDismissed(campaignId) {
@@ -364,6 +489,12 @@
   ------------------------------------------------------------ */
 
   function buildWidget(campaign) {
+    /* Counted once per page load, the moment the campaign is
+       chosen — that is what "shown to this visitor" means for a
+       frequency cap. Re-renders inside the same popup (teaser to
+       offer to success) must not count again. */
+    markViewed(campaign.campaignId);
+
     var settings = popupSettingsFor(campaign.steps);
     var overlay = null;
 
@@ -571,6 +702,9 @@
       }
 
       submitContact(campaign, values, function () {
+        /* They gave us their details, so the "if collected"
+           cooldown starts now. */
+        markCollected(campaign.campaignId);
         showStep("success");
       });
     }
@@ -732,7 +866,19 @@
             continue;
           }
 
-          if (dismissedRecently(campaign.campaignId)) {
+          if (!matchesDevices(campaign)) {
+            continue;
+          }
+
+          if (!withinFrequencyCap(campaign)) {
+            continue;
+          }
+
+          if (collectedBlocks(campaign)) {
+            continue;
+          }
+
+          if (dismissedBlocks(campaign)) {
             continue;
           }
 
