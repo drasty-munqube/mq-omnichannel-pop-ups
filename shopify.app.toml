@@ -51,14 +51,17 @@ api_version = "2026-07"
   uri = "/webhooks/app/scopes_update"
   topics = [ "app/scopes_update" ]
 
-[events]
-api_version = "unstable"
+  [[webhooks.subscriptions]]
+  uri = "/webhooks/customers/data_request"
+  topics = [ "customers/data_request" ]
 
-[[events.subscription]]
-handle = "product_events"
-topic = "Product"
-actions = ["update"]
-uri = "/events/products"
+  [[webhooks.subscriptions]]
+  uri = "/webhooks/customers/redact"
+  topics = [ "customers/redact" ]
+
+  [[webhooks.subscriptions]]
+  uri = "/webhooks/shop/redact"
+  topics = [ "shop/redact" ]
 
 [auth]
 redirect_urls = [
