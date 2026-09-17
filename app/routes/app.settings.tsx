@@ -1,235 +1,35 @@
-import type { LoaderFunctionArgs } from "react-router";
-import { Link, useLoaderData } from "react-router";
-
-import {
-  buildSnippet,
-  CodeBlock,
-  CopyButton,
-} from "../components/copy-snippet";
-import { authenticate } from "../shopify.server";
-
-/* ============================================================
-   LOADER
-
-   Everything on this page is a copy-paste install snippet, so
-   the only two things it needs are the merchant's own shop
-   domain (that's the public identifier the widget sends to
-   /api/widget) and this app's public origin (where
-   mq-widget.js is served from).
-
-   SHOPIFY_APP_URL is set in the deploy environment. If it's
-   ever missing we fall back to the origin of the incoming
-   request, so the snippet is never rendered with a blank host.
-   ============================================================ */
-
-export async function loader({
-  request,
-}: LoaderFunctionArgs) {
-  const { session } =
-    await authenticate.admin(request);
-
-  const appUrl = (
-    process.env.SHOPIFY_APP_URL ||
-    new URL(request.url).origin
-  ).replace(/\/+$/, "");
-
-  return {
-    shop: session.shop,
-    appUrl,
-  };
-}
-
-/* ============================================================
-   PLATFORM STEPS
-   ============================================================ */
-
-const PLATFORMS: {
-  name: string;
-  steps: string[];
-}[] = [
-  {
-    name: "WordPress",
-    steps: [
-      "Install any headers-and-footers plugin, for example WPCode or Insert Headers and Footers.",
-      "Open its settings and find the Footer (or Body) box.",
-      "Paste the snippet there and save.",
-    ],
-  },
-  {
-    name: "Google Tag Manager",
-    steps: [
-      "In GTM, create a new Tag and choose Custom HTML.",
-      "Paste the snippet into the HTML box.",
-      "Set the trigger to All Pages, then Save and Publish.",
-    ],
-  },
-  {
-    name: "Wix",
-    steps: [
-      "Go to Settings, then Custom Code, under the Advanced section.",
-      "Add code to Body - end, and apply it to All pages.",
-      "Paste the snippet and apply.",
-    ],
-  },
-  {
-    name: "Squarespace",
-    steps: [
-      "Go to Settings, then Advanced, then Code Injection.",
-      "Paste the snippet into the Footer box.",
-      "Save.",
-    ],
-  },
-  {
-    name: "Another Shopify store",
-    steps: [
-      "From the Shopify admin open Online Store, Themes, then Edit code.",
-      "Open layout/theme.liquid.",
-      "Paste the snippet just above the closing body tag and save.",
-    ],
-  },
-  {
-    name: "Custom or hand-built site",
-    steps: [
-      "Open the page template or layout file.",
-      "Paste the snippet just above the closing body tag.",
-      "Deploy the change.",
-    ],
-  },
-];
+import { Link } from "react-router";
 
 /* ============================================================
    SETTINGS
+
+   The install snippet and the per-platform paste instructions
+   used to live here. They moved to Websites, next to the list
+   of sites they apply to and the per-site install status, so
+   there is one place to answer "where is my code and did it
+   land". What stays here is the Shopify storefront, which does
+   not use the snippet at all, and the handful of rules that
+   decide whether a popup actually appears.
    ============================================================ */
 
 export default function Settings() {
-  const { shop, appUrl } =
-    useLoaderData<typeof loader>();
-
-  const snippet = buildSnippet(appUrl, shop);
-  const demoUrl = `${appUrl}/demo.html`;
-
   return (
     <s-page
       heading="Settings"
       inlineSize="large"
     >
-      {/* ---------- install snippet ---------- */}
+      {/* ---------- where the snippet lives now ---------- */}
 
       <s-section>
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: 16,
-            flexWrap: "wrap",
-            marginBottom: 6,
-          }}
-        >
-          <div>
-            <s-heading>
-              Install on any website
-            </s-heading>
-            <s-paragraph>
-              Paste this one line just above the
-              closing body tag of any site, and
-              your live campaigns will run there.
-              It works on any platform, Shopify or
-              not.
-            </s-paragraph>
-          </div>
+        <s-heading>Install code</s-heading>
 
-          <CopyButton value={snippet} />
-        </div>
-
-        <div style={{ marginTop: 12 }}>
-          <CodeBlock code={snippet} />
-        </div>
-
-        <div style={{ marginTop: 12 }}>
-          <s-paragraph>
-            The code already carries your store
-            identifier, so nothing in it needs to
-            be edited. To see it working right
-            now, open{" "}
-            <s-link
-              href={demoUrl}
-              target="_blank"
-            >
-              the demo page
-            </s-link>{" "}
-            and scroll down.
-          </s-paragraph>
-        </div>
-
-        <div style={{ marginTop: 10 }}>
-          <s-paragraph>
-            To control which campaign runs on
-            which website, open{" "}
-            <Link to="/app/websites">
-              Websites
-            </Link>
-            .
-          </s-paragraph>
-        </div>
-      </s-section>
-
-      {/* ---------- platform steps ---------- */}
-
-      <s-section heading="Where to paste it">
         <s-paragraph>
-          Pick whichever matches the site you are
-          installing on. The snippet is the same
-          every time, only the place you paste it
-          changes.
+          The embed snippet for other websites, the
+          paste instructions for each platform, and
+          the install status of every site are all
+          under{" "}
+          <Link to="/app/websites">Websites</Link>.
         </s-paragraph>
-
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns:
-              "repeat(auto-fit, minmax(260px, 1fr))",
-            gap: 14,
-            marginTop: 14,
-          }}
-        >
-          {PLATFORMS.map((platform) => (
-            <div
-              key={platform.name}
-              style={{
-                padding: 14,
-                border: "1px solid #E5E7EB",
-                borderRadius: 10,
-                background: "#FFFFFF",
-              }}
-            >
-              <div
-                style={{
-                  fontSize: 13,
-                  fontWeight: 600,
-                  color: "#111827",
-                  marginBottom: 8,
-                }}
-              >
-                {platform.name}
-              </div>
-
-              <ol
-                style={{
-                  margin: 0,
-                  paddingLeft: 18,
-                  fontSize: 13,
-                  lineHeight: 1.7,
-                  color: "#4B5563",
-                }}
-              >
-                {platform.steps.map((step) => (
-                  <li key={step}>{step}</li>
-                ))}
-              </ol>
-            </div>
-          ))}
-        </div>
       </s-section>
 
       {/* ---------- shopify storefront ---------- */}
@@ -268,8 +68,20 @@ export default function Settings() {
           </s-list-item>
           <s-list-item>
             A campaign also has to be allowed on
-            that website. Campaigns are set to run
-            on all websites by default.
+            that website. Campaigns run on all
+            websites by default, and you can narrow
+            that down in the campaign editor.
+          </s-list-item>
+          <s-list-item>
+            Frequency rules apply. If a visitor has
+            already seen it as many times as the
+            campaign allows, or is inside a re-show
+            cooldown, nothing appears for them.
+          </s-list-item>
+          <s-list-item>
+            Device rules apply. A campaign limited
+            to desktop will not appear on a narrow
+            window, even on a desktop machine.
           </s-list-item>
           <s-list-item>
             On non-Shopify sites, only campaigns

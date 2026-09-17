@@ -77,6 +77,65 @@ function runsOnSite(
   return targets.includes(siteId);
 }
 
+/* ------------------------------------------------------------
+   Where the snippet goes, per platform. Lives next to the
+   snippet itself so the two can never drift apart.
+   ------------------------------------------------------------ */
+
+const PLATFORMS: {
+  name: string;
+  steps: string[];
+}[] = [
+  {
+    name: "WordPress",
+    steps: [
+      "Install any headers-and-footers plugin, for example WPCode or Insert Headers and Footers.",
+      "Open its settings and find the Footer (or Body) box.",
+      "Paste the snippet there and save.",
+    ],
+  },
+  {
+    name: "Google Tag Manager",
+    steps: [
+      "In GTM, create a new Tag and choose Custom HTML.",
+      "Paste the snippet into the HTML box.",
+      "Set the trigger to All Pages, then Save and Publish.",
+    ],
+  },
+  {
+    name: "Wix",
+    steps: [
+      "Go to Settings, then Custom Code, under the Advanced section.",
+      "Add code to Body - end, and apply it to All pages.",
+      "Paste the snippet and apply.",
+    ],
+  },
+  {
+    name: "Squarespace",
+    steps: [
+      "Go to Settings, then Advanced, then Code Injection.",
+      "Paste the snippet into the Footer box.",
+      "Save.",
+    ],
+  },
+  {
+    name: "Another Shopify store",
+    steps: [
+      "From the Shopify admin open Online Store, Themes, then Edit code.",
+      "Open layout/theme.liquid.",
+      "Paste the snippet just above the closing body tag and save.",
+    ],
+  },
+  {
+    name: "Custom or hand-built site",
+    steps: [
+      "Open the page template or layout file.",
+      "Paste the snippet just above the closing body tag.",
+      "Deploy the change.",
+    ],
+  },
+];
+
 export async function loader({
   request,
 }: LoaderFunctionArgs) {
@@ -242,7 +301,11 @@ function Badge({
   tone = "neutral",
 }: {
   text: string;
-  tone?: "neutral" | "live" | "info";
+  tone?:
+    | "neutral"
+    | "live"
+    | "info"
+    | "warn";
 }) {
   const palette = {
     neutral: {
@@ -256,6 +319,10 @@ function Badge({
     info: {
       color: "#1D4ED8",
       background: "#E0E7FF",
+    },
+    warn: {
+      color: "#92400E",
+      background: "#FEF0C7",
     },
   }[tone];
 
@@ -302,7 +369,6 @@ const subtleButton: React.CSSProperties = {
 
 function SiteCard({
   site,
-  snippet,
   busy,
 }: {
   site: {
@@ -314,7 +380,6 @@ function SiteCard({
     lastSeenAt: string | null;
     campaigns: CampaignSummary[];
   };
-  snippet: string;
   busy: boolean;
 }) {
   const [editing, setEditing] = useState(false);
@@ -562,9 +627,15 @@ function SiteCard({
         )}
       </div>
 
-      {/* ---------- snippet ---------- */}
+      {/* ---------- install status ----------
 
-      <div style={{ marginTop: 16 }}>
+           The snippet itself lives once at the top of the page,
+           because it is identical for every website. What is
+           worth showing per site is whether it actually arrived:
+           lastSeenAt is only set when that hostname has really
+           called the widget endpoint. */}
+
+      <div style={{ marginTop: 14 }}>
         {isShopify ? (
           <div
             style={{
@@ -579,50 +650,51 @@ function SiteCard({
             Themes, Customize, App embeds.
           </div>
         ) : (
-          <>
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent:
-                  "space-between",
-                gap: 12,
-                marginBottom: 8,
-                flexWrap: "wrap",
-              }}
-            >
-              <div
-                style={{
-                  fontSize: 12,
-                  fontWeight: 600,
-                  color: "#6B7280",
-                  textTransform: "uppercase",
-                  letterSpacing: 0.4,
-                }}
-              >
-                Snippet for this website
-              </div>
-
-              <CopyButton value={snippet} />
-            </div>
-
-            <CodeBlock code={snippet} />
-
-            {site.lastSeenAt && (
-              <div
-                style={{
-                  marginTop: 8,
-                  fontSize: 12,
-                  color: "#6B7280",
-                }}
-              >
-                Last request from this website:{" "}
-                {new Date(
-                  site.lastSeenAt,
-                ).toLocaleString("en-IN")}
-              </div>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              flexWrap: "wrap",
+            }}
+          >
+            {site.lastSeenAt ? (
+              <>
+                <Badge
+                  text="Snippet installed"
+                  tone="live"
+                />
+                <span
+                  style={{
+                    fontSize: 12,
+                    color: "#6B7280",
+                  }}
+                >
+                  Last request{" "}
+                  {new Date(
+                    site.lastSeenAt,
+                  ).toLocaleString("en-IN")}
+                </span>
+              </>
+            ) : (
+              <>
+                <Badge
+                  text="Installation pending"
+                  tone="warn"
+                />
+                <span
+                  style={{
+                    fontSize: 12,
+                    color: "#6B7280",
+                  }}
+                >
+                  Nothing has loaded from this
+                  website yet. Paste the snippet
+                  above into it.
+                </span>
+              </>
             )}
-          </>
+          </div>
         )}
       </div>
     </div>
@@ -649,14 +721,148 @@ export default function Websites() {
     (site) => site.kind !== "shopify",
   ).length;
 
+  /* "Installed" means at least one non-Shopify website has
+     actually loaded the widget, not that a snippet was copied.
+     Until that happens the install is genuinely pending. */
+
+  const installed = sites.some(
+    (site) =>
+      site.kind !== "shopify" &&
+      site.lastSeenAt,
+  );
+
+  const demoUrl = `${appUrl}/demo.html`;
+
   return (
     <s-page
       heading="Websites"
       inlineSize="large"
     >
-      {/* ---------- intro + add ---------- */}
+      {/* ---------- install snippet ---------- */}
 
       <s-section>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
+            flexWrap: "wrap",
+            marginBottom: 4,
+          }}
+        >
+          <s-heading>
+            Install code snippet
+          </s-heading>
+
+          <Badge
+            text={
+              installed
+                ? "Installed"
+                : "Installation pending"
+            }
+            tone={installed ? "live" : "warn"}
+          />
+        </div>
+
+        <s-paragraph>
+          Copy this code into your product or
+          website, right before the closing body
+          tag. It is the same snippet for every
+          site and it already carries your store
+          identifier, so nothing in it needs to be
+          edited.
+        </s-paragraph>
+
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "flex-end",
+            marginTop: 12,
+            marginBottom: 8,
+          }}
+        >
+          <CopyButton value={snippet} />
+        </div>
+
+        <CodeBlock code={snippet} />
+
+        <div style={{ marginTop: 12 }}>
+          <s-paragraph>
+            To see it working right now, open{" "}
+            <s-link
+              href={demoUrl}
+              target="_blank"
+            >
+              the demo page
+            </s-link>{" "}
+            and scroll down. A website shows as
+            installed here once it has actually
+            loaded the widget.
+          </s-paragraph>
+        </div>
+      </s-section>
+
+      {/* ---------- where to paste it ---------- */}
+
+      <s-section heading="Where to paste it">
+        <s-paragraph>
+          Pick whichever matches the site you are
+          installing on. The snippet is the same
+          every time, only the place you paste it
+          changes.
+        </s-paragraph>
+
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns:
+              "repeat(auto-fit, minmax(260px, 1fr))",
+            gap: 14,
+            marginTop: 14,
+          }}
+        >
+          {PLATFORMS.map((platform) => (
+            <div
+              key={platform.name}
+              style={{
+                padding: 14,
+                border: "1px solid #E5E7EB",
+                borderRadius: 10,
+                background: "#FFFFFF",
+              }}
+            >
+              <div
+                style={{
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: "#111827",
+                  marginBottom: 8,
+                }}
+              >
+                {platform.name}
+              </div>
+
+              <ol
+                style={{
+                  margin: 0,
+                  paddingLeft: 18,
+                  fontSize: 13,
+                  lineHeight: 1.7,
+                  color: "#4B5563",
+                }}
+              >
+                {platform.steps.map((step) => (
+                  <li key={step}>{step}</li>
+                ))}
+              </ol>
+            </div>
+          ))}
+        </div>
+      </s-section>
+
+      {/* ---------- intro + add ---------- */}
+
+      <s-section heading="Your websites">
         <s-paragraph>
           Every website you paste the snippet on
           shows up here. Use this screen to see
@@ -789,7 +995,6 @@ export default function Websites() {
             <SiteCard
               key={site.id}
               site={site}
-              snippet={snippet}
               busy={busy}
             />
           ))}
