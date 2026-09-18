@@ -22,46 +22,6 @@ import {
   CopyButton,
 } from "../components/copy-snippet";
 
-/* ============================================================
-   STOREFRONT ROUTE TARGETS
-   ============================================================ */
-
-const STOREFRONT_ROUTES: {
-  value: string;
-  label: string;
-  hint: string;
-}[] = [
-  {
-    value: "route:index",
-    label: "Home page",
-    hint: "/",
-  },
-  {
-    value: "route:product",
-    label: "All product pages",
-    hint: "/products/*",
-  },
-  {
-    value: "route:collection",
-    label: "All collection pages",
-    hint: "/collections/*",
-  },
-  {
-    value: "route:cart",
-    label: "Cart page",
-    hint: "/cart",
-  },
-  {
-    value: "route:search",
-    label: "Search page",
-    hint: "/search",
-  },
-  {
-    value: "route:blog",
-    label: "Blog & article pages",
-    hint: "/blogs/*",
-  },
-];
 
 /* ------------------------------------------------------------
    Menu items arrive as full URLs on whatever domain the store
@@ -1579,9 +1539,17 @@ export default function Campaigns() {
         ? "specific"
         : "all",
     );
+    /* route: targets came from the old fixed list of page
+       types, which no longer has a UI. Dropping them on open
+       keeps the screen honest: every selection that counts is
+       one the merchant can actually see and untick. */
+
     setPageTargets(
       Array.isArray(campaign.pageTargets)
-        ? (campaign.pageTargets as string[])
+        ? (campaign.pageTargets as string[]).filter(
+            (target) =>
+              !target.startsWith("route:"),
+          )
         : [],
     );
     setSiteTargetMode(
@@ -5433,110 +5401,6 @@ export default function Campaigns() {
                           </div>
                         )}
 
-                        <div
-                          style={{
-                            fontSize: "11px",
-                            fontWeight: 700,
-                            letterSpacing: "0.06em",
-                            color: "#8A94A6",
-                            margin: "22px 0 10px",
-                          }}
-                        >
-                          PAGE TYPES
-                        </div>
-
-                        <div
-                          style={{
-                            display: "grid",
-                            gridTemplateColumns:
-                              "repeat(2, minmax(0, 1fr))",
-                            gap: "8px",
-                          }}
-                        >
-                          {STOREFRONT_ROUTES.map(
-                            (route) => {
-                              const checked =
-                                pageTargets.includes(
-                                  route.value,
-                                );
-
-                              return (
-                                <label
-                                  key={route.value}
-                                  style={{
-                                    display: "flex",
-                                    alignItems:
-                                      "center",
-                                    gap: "10px",
-                                    padding:
-                                      "11px 14px",
-                                    border: checked
-                                      ? "1px solid #0B3D66"
-                                      : "1px solid #DCE3EA",
-                                    background:
-                                      checked
-                                        ? "#F3F7FB"
-                                        : "#FFFFFF",
-                                    borderRadius:
-                                      "8px",
-                                    cursor:
-                                      "pointer",
-                                  }}
-                                >
-                                  <input
-                                    type="checkbox"
-                                    checked={
-                                      checked
-                                    }
-                                    onChange={() =>
-                                      togglePageTarget(
-                                        route.value,
-                                      )
-                                    }
-                                    style={{
-                                      cursor:
-                                        "pointer",
-                                    }}
-                                  />
-
-                                  <span
-                                    style={{
-                                      display:
-                                        "block",
-                                    }}
-                                  >
-                                    <span
-                                      style={{
-                                        display:
-                                          "block",
-                                        fontSize:
-                                          "13px",
-                                        color:
-                                          "#172033",
-                                        fontWeight: 600,
-                                      }}
-                                    >
-                                      {route.label}
-                                    </span>
-
-                                    <span
-                                      style={{
-                                        display:
-                                          "block",
-                                        fontSize:
-                                          "11px",
-                                        color:
-                                          "#9AA4B2",
-                                      }}
-                                    >
-                                      {route.hint}
-                                    </span>
-                                  </span>
-                                </label>
-                              );
-                            },
-                          )}
-                        </div>
 
                         {renderError(
                           "pageTargets",
