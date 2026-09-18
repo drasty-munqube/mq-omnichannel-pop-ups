@@ -59,6 +59,23 @@
     return map[type] || null;
   }
 
+  /* Normalised the same way the admin stores menu paths:
+     lowercase, no query, no hash, no trailing slash. Anything
+     else and a target picked from the store's own navigation
+     would never match the page it came from. */
+
+  function currentPath() {
+    var path = (
+      window.location.pathname || "/"
+    ).toLowerCase();
+
+    if (path.length > 1) {
+      path = path.replace(/\/+$/, "");
+    }
+
+    return path || "/";
+  }
+
   function matchesPageTargets(campaign) {
     if (campaign.pageTargetMode !== "specific") {
       return true;
@@ -74,6 +91,16 @@
     if (
       pageHandle &&
       targets.indexOf("page:" + pageHandle) !== -1
+    ) {
+      return true;
+    }
+
+    /* Targets chosen from the store's navigation, which can
+       point at anything — a collection, the home page, a policy
+       page — so they are matched by path rather than by type. */
+    if (
+      targets.indexOf("path:" + currentPath()) !==
+      -1
     ) {
       return true;
     }

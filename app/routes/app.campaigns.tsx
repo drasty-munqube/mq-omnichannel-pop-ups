@@ -63,6 +63,47 @@ const STOREFRONT_ROUTES: {
   },
 ];
 
+/* ------------------------------------------------------------
+   Menu items arrive as full URLs on whatever domain the store
+   serves, so they are reduced to the path the browser will
+   actually be on. Lowercased and stripped of query, hash and a
+   trailing slash so that what is stored and what the widget
+   compares are the same string.
+   ------------------------------------------------------------ */
+
+function toStorefrontPath(
+  url: string | null | undefined,
+): string | null {
+  if (!url) {
+    return null;
+  }
+
+  let path = String(url).trim();
+
+  if (!path) {
+    return null;
+  }
+
+  path = path.replace(
+    /^[a-z][a-z0-9+.-]*:\/\/[^/]*/i,
+    "",
+  );
+
+  path = path.split("?")[0].split("#")[0];
+
+  if (!path.startsWith("/")) {
+    path = "/" + path;
+  }
+
+  path = path.toLowerCase();
+
+  if (path.length > 1) {
+    path = path.replace(/\/+$/, "");
+  }
+
+  return path || "/";
+}
+
 /* ============================================================
    LOADER
    ============================================================ */
@@ -149,7 +190,118 @@ export async function loader({
     );
 
     shopPagesError =
-      "Could not load your store pages. Approve the updated app permissions to target specific pages.";
+      "Could not read this store's pages. The app needs the read_content permission, which is granted when the app is installed or reinstalled. Open the app from Settings, Apps and sales channels, remove it and install it again, then come back here.";
+  }
+
+  /* SHOPIFY STOREFRONT NAVIGATION
+
+     The Pages query above only returns Shopify's Page resource,
+     so a storefront whose menu reads Home, Catalog, Contact only
+     offered Contact — Home is a route and Catalog is a
+     collection, neither of which is a Page.
+
+     Reading the store's actual menus gives the list a merchant
+     recognises, because it is literally their own navigation.
+     Every item is targeted by its path, which works no matter
+     what kind of resource it points at.
+
+     Wrapped in its own try/catch and allowed to come back empty:
+     the menus query needs its own permission, and if it is not
+     granted the page list below must still work. */
+
+  let navItems: {
+    id: string;
+    title: string;
+    path: string;
+  }[] = [];
+
+  try {
+    const response = await admin.graphql(
+      `#graphql
+        query CampaignTargetMenus {
+          menus(first: 10) {
+            edges {
+              node {
+                id
+                items {
+                  id
+                  title
+                  url
+                  items {
+                    id
+                    title
+                    url
+                  }
+                }
+              }
+            }
+          }
+        }
+      `,
+    );
+
+    const body = (await response.json()) as {
+      data?: {
+        menus?: {
+          edges?: {
+            node: {
+              items?: {
+                id: string;
+                title: string;
+                url: string | null;
+                items?: {
+                  id: string;
+                  title: string;
+                  url: string | null;
+                }[];
+              }[];
+            };
+          }[];
+        };
+      };
+      errors?: unknown;
+    };
+
+    if (!body.errors) {
+      const seen = new Set<string>();
+
+      const add = (item: {
+        id: string;
+        title: string;
+        url: string | null;
+      }) => {
+        const path = toStorefrontPath(item.url);
+
+        if (!path || seen.has(path)) {
+          return;
+        }
+
+        seen.add(path);
+
+        navItems.push({
+          id: item.id,
+          title: item.title,
+          path,
+        });
+      };
+
+      for (const edge of body.data?.menus
+        ?.edges || []) {
+        for (const item of edge.node.items ||
+          []) {
+          add(item);
+
+          for (const child of item.items || []) {
+            add(child);
+          }
+        }
+      }
+    }
+  } catch (error) {
+    console.error(
+      "LOAD STORE NAVIGATION ERROR:",
+      error,
+    );
   }
 
   /* SHOPIFY DISCOUNTS */
@@ -376,6 +528,7 @@ export async function loader({
     campaigns,
     shopPages,
     shopPagesError,
+    navItems,
     discounts,
     discountsError,
     sites,
@@ -980,6 +1133,7 @@ export default function Campaigns() {
     campaigns,
     shopPages,
     shopPagesError,
+    navItems,
     discounts,
     discountsError,
     sites,
@@ -1015,6 +1169,77 @@ export default function Campaigns() {
   const [showWizard, setShowWizard] = useState(false);
 
   const [wizardStep, setWizardStep] = useState(1);
+
+  /* =========================================================
+     THE PAGE LIST A MERCHANT RECOGNISES
+
+     Their own storefront navigation first, since that is what
+     they see on their site, with any Shopify Page not linked
+     from a menu added after it so nothing becomes unreachable.
+
+     A nav item pointing at /pages/<handle> is stored as
+     page:<handle> rather than by path. That keeps selections
+     made before navigation existed checked, and keeps using the
+     storefront's existing handle matching for those.
+  ========================================================= */
+
+  const storePageOptions = (() => {
+    const pageByPath = new Map(
+      shopPages.map((page) => [
+        `/pages/${page.handle.toLowerCase()}`,
+        page,
+      ]),
+    );
+
+    const options: {
+      key: string;
+      value: string;
+      label: string;
+      hint: string;
+    }[] = [];
+
+    const used = new Set<string>();
+
+    for (const item of navItems) {
+      const page = pageByPath.get(item.path);
+
+      const value = page
+        ? `page:${page.handle}`
+        : `path:${item.path}`;
+
+      if (used.has(value)) {
+        continue;
+      }
+
+      used.add(value);
+
+      options.push({
+        key: item.id,
+        value,
+        label: item.title,
+        hint: item.path,
+      });
+    }
+
+    for (const page of shopPages) {
+      const value = `page:${page.handle}`;
+
+      if (used.has(value)) {
+        continue;
+      }
+
+      used.add(value);
+
+      options.push({
+        key: page.id,
+        value,
+        label: page.title,
+        hint: `/pages/${page.handle}`,
+      });
+    }
+
+    return options;
+  })();
 
   const totalSteps = 7;
 
@@ -5096,7 +5321,7 @@ export default function Campaigns() {
                           >
                             {shopPagesError}
                           </div>
-                        ) : shopPages.length ===
+                        ) : storePageOptions.length ===
                           0 ? (
                           <div
                             style={{
@@ -5108,8 +5333,8 @@ export default function Campaigns() {
                               fontSize: "12px",
                             }}
                           >
-                            No custom pages found in
-                            your store.
+                            No pages found in this
+                            store yet.
                           </div>
                         ) : (
                           <div
@@ -5122,9 +5347,10 @@ export default function Campaigns() {
                               overflowY: "auto",
                             }}
                           >
-                            {shopPages.map(
+                            {storePageOptions.map(
                               (page) => {
-                                const value = `page:${page.handle}`;
+                                const value =
+                                  page.value;
 
                                 const checked =
                                   pageTargets.includes(
@@ -5133,7 +5359,7 @@ export default function Campaigns() {
 
                                 return (
                                   <label
-                                    key={page.id}
+                                    key={page.key}
                                     style={{
                                       display:
                                         "flex",
@@ -5184,7 +5410,7 @@ export default function Campaigns() {
                                           fontWeight: 600,
                                         }}
                                       >
-                                        {page.title}
+                                        {page.label}
                                       </span>
 
                                       <span
@@ -5197,8 +5423,7 @@ export default function Campaigns() {
                                             "#9AA4B2",
                                         }}
                                       >
-                                        /pages/
-                                        {page.handle}
+                                        {page.hint}
                                       </span>
                                     </span>
                                   </label>
