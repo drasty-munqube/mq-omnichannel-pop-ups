@@ -105,7 +105,7 @@ export async function loader({
     const response = await admin.graphql(
       `#graphql
         query CampaignTargetPages {
-          pages(first: 50, sortKey: TITLE) {
+          pages(first: 250, sortKey: TITLE) {
             edges {
               node {
                 id
@@ -135,7 +135,7 @@ export async function loader({
 
     if (body.errors) {
       shopPagesError =
-        "Could not load your store pages. Approve the updated app permissions to target specific pages.";
+        "Could not read this store's pages. The app needs the read_content permission, which is granted when the app is installed or reinstalled. Open the app from Settings, Apps and sales channels, remove it and install it again, then come back here.";
     } else {
       shopPages =
         body.data?.pages?.edges?.map(
@@ -5066,111 +5066,6 @@ export default function Campaigns() {
                         }}
                       >
 
-                        <div
-                          style={{
-                            fontSize: "11px",
-                            fontWeight: 700,
-                            letterSpacing: "0.06em",
-                            color: "#8A94A6",
-                            marginBottom: "10px",
-                          }}
-                        >
-                          STOREFRONT ROUTES
-                        </div>
-
-                        <div
-                          style={{
-                            display: "grid",
-                            gridTemplateColumns:
-                              "repeat(2, minmax(0, 1fr))",
-                            gap: "8px",
-                          }}
-                        >
-                          {STOREFRONT_ROUTES.map(
-                            (route) => {
-                              const checked =
-                                pageTargets.includes(
-                                  route.value,
-                                );
-
-                              return (
-                                <label
-                                  key={route.value}
-                                  style={{
-                                    display: "flex",
-                                    alignItems:
-                                      "center",
-                                    gap: "10px",
-                                    padding:
-                                      "11px 14px",
-                                    border: checked
-                                      ? "1px solid #0B3D66"
-                                      : "1px solid #DCE3EA",
-                                    background:
-                                      checked
-                                        ? "#F3F7FB"
-                                        : "#FFFFFF",
-                                    borderRadius:
-                                      "8px",
-                                    cursor:
-                                      "pointer",
-                                  }}
-                                >
-                                  <input
-                                    type="checkbox"
-                                    checked={
-                                      checked
-                                    }
-                                    onChange={() =>
-                                      togglePageTarget(
-                                        route.value,
-                                      )
-                                    }
-                                    style={{
-                                      cursor:
-                                        "pointer",
-                                    }}
-                                  />
-
-                                  <span
-                                    style={{
-                                      display:
-                                        "block",
-                                    }}
-                                  >
-                                    <span
-                                      style={{
-                                        display:
-                                          "block",
-                                        fontSize:
-                                          "13px",
-                                        color:
-                                          "#172033",
-                                        fontWeight: 600,
-                                      }}
-                                    >
-                                      {route.label}
-                                    </span>
-
-                                    <span
-                                      style={{
-                                        display:
-                                          "block",
-                                        fontSize:
-                                          "11px",
-                                        color:
-                                          "#9AA4B2",
-                                      }}
-                                    >
-                                      {route.hint}
-                                    </span>
-                                  </span>
-                                </label>
-                              );
-                            },
-                          )}
-                        </div>
-
                         {/* SHOPIFY PAGES */}
 
                         <div
@@ -5179,7 +5074,7 @@ export default function Campaigns() {
                             fontWeight: 700,
                             letterSpacing: "0.06em",
                             color: "#8A94A6",
-                            margin: "22px 0 10px",
+                            marginBottom: "10px",
                           }}
                         >
                           YOUR STORE PAGES
@@ -5312,6 +5207,111 @@ export default function Campaigns() {
                             )}
                           </div>
                         )}
+
+                        <div
+                          style={{
+                            fontSize: "11px",
+                            fontWeight: 700,
+                            letterSpacing: "0.06em",
+                            color: "#8A94A6",
+                            margin: "22px 0 10px",
+                          }}
+                        >
+                          PAGE TYPES
+                        </div>
+
+                        <div
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns:
+                              "repeat(2, minmax(0, 1fr))",
+                            gap: "8px",
+                          }}
+                        >
+                          {STOREFRONT_ROUTES.map(
+                            (route) => {
+                              const checked =
+                                pageTargets.includes(
+                                  route.value,
+                                );
+
+                              return (
+                                <label
+                                  key={route.value}
+                                  style={{
+                                    display: "flex",
+                                    alignItems:
+                                      "center",
+                                    gap: "10px",
+                                    padding:
+                                      "11px 14px",
+                                    border: checked
+                                      ? "1px solid #0B3D66"
+                                      : "1px solid #DCE3EA",
+                                    background:
+                                      checked
+                                        ? "#F3F7FB"
+                                        : "#FFFFFF",
+                                    borderRadius:
+                                      "8px",
+                                    cursor:
+                                      "pointer",
+                                  }}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={
+                                      checked
+                                    }
+                                    onChange={() =>
+                                      togglePageTarget(
+                                        route.value,
+                                      )
+                                    }
+                                    style={{
+                                      cursor:
+                                        "pointer",
+                                    }}
+                                  />
+
+                                  <span
+                                    style={{
+                                      display:
+                                        "block",
+                                    }}
+                                  >
+                                    <span
+                                      style={{
+                                        display:
+                                          "block",
+                                        fontSize:
+                                          "13px",
+                                        color:
+                                          "#172033",
+                                        fontWeight: 600,
+                                      }}
+                                    >
+                                      {route.label}
+                                    </span>
+
+                                    <span
+                                      style={{
+                                        display:
+                                          "block",
+                                        fontSize:
+                                          "11px",
+                                        color:
+                                          "#9AA4B2",
+                                      }}
+                                    >
+                                      {route.hint}
+                                    </span>
+                                  </span>
+                                </label>
+                              );
+                            },
+                          )}
+                        </div>
 
                         {renderError(
                           "pageTargets",
