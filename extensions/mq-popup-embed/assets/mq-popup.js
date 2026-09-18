@@ -515,11 +515,6 @@
   }
 
   function buildWidget(campaign) {
-    /* Counted once per page load, the moment the campaign is
-       chosen — that is what "shown to this visitor" means for a
-       frequency cap. */
-    markViewed(campaign.campaignId);
-
     var settings = popupSettingsFor(campaign.steps);
     var overlay = null;
 
@@ -844,7 +839,21 @@
 
     /* ---------------- TRIGGER ---------------- */
 
+    var counted = false;
+
     function showTeaser() {
+      /* The view is counted here, when the popup actually
+         reaches the screen — not when the campaign was picked.
+         A delay or scroll trigger may never fire, and a visitor
+         who never saw anything must not have it charged against
+         their frequency cap. Guarded so a re-entrant trigger
+         cannot double count. */
+
+      if (!counted) {
+        counted = true;
+        markViewed(campaign.campaignId);
+      }
+
       document.body.appendChild(pill);
     }
 
