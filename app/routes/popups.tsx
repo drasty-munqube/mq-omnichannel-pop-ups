@@ -18,6 +18,16 @@ import { ensureShopifySite } from "../models/site.server";
    public.appProxy(request) verifies that signature before this
    code runs, so no separate auth check is needed here.
 
+   WHY THIS FILE IS NAMED popups.tsx
+
+   Shopify strips the prefix and subpath and appends whatever is
+   left to the proxy URL. With app_proxy.url set to the app's
+   root, /apps/mq-popups/popups arrives here as /popups — so the
+   route has to live at /popups, not /proxy/popups. It was named
+   proxy.popups.tsx before, which resolved to /proxy/popups and
+   returned 404 to every storefront request. If app_proxy.url
+   ever gains a /proxy suffix, rename this back to match.
+
    For any OTHER website (not a Shopify storefront), see
    app/routes/api.widget.tsx instead — App Proxy only works
    from inside Shopify.
