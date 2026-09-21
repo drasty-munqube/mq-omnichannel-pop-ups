@@ -885,7 +885,7 @@ export async function action({
         return {
           ok: false,
           error:
-            "Select at least one website, or target all websites.",
+            "Choose a website, or target all websites.",
         };
       }
     }
@@ -1280,14 +1280,12 @@ export default function Campaigns() {
     string[]
   >([]);
 
-  const toggleSiteTarget = (value: string) => {
-    setSiteTargets((current) =>
-      current.includes(value)
-        ? current.filter(
-            (item) => item !== value,
-          )
-        : [...current, value],
-    );
+  /* A campaign runs on one website at a time, so picking a site
+     replaces the selection rather than adding to it. siteTargets
+     stays an array so the stored shape (and everything reading
+     it) is unchanged — it just never holds more than one id. */
+  const selectSiteTarget = (value: string) => {
+    setSiteTargets([value]);
 
     clearError("siteTargets");
   };
@@ -1924,7 +1922,7 @@ export default function Campaigns() {
       siteTargets.length === 0
     ) {
       stepErrors.siteTargets =
-        "Select at least one website, or switch to all websites.";
+        "Choose a website, or switch to all websites.";
     }
 
     if (step === 4 && !selectedReward) {
@@ -5944,8 +5942,8 @@ export default function Campaigns() {
                         },
                         {
                           value: "selected" as const,
-                          label: "Selected websites",
-                          text: "Choose exactly which sites run it.",
+                          label: "One website",
+                          text: "Pick the single site that runs it.",
                         },
                       ]
                     ).map((mode) => (
@@ -6053,10 +6051,11 @@ export default function Campaigns() {
                                 }}
                               >
                                 <input
-                                  type="checkbox"
+                                  type="radio"
+                                  name="mq-site-target"
                                   checked={checked}
                                   onChange={() =>
-                                    toggleSiteTarget(
+                                    selectSiteTarget(
                                       site.id,
                                     )
                                   }
@@ -6110,11 +6109,12 @@ export default function Campaigns() {
                             color: "#6B7280",
                           }}
                         >
-                          {siteTargets.length} website
-                          {siteTargets.length === 1
-                            ? ""
-                            : "s"}{" "}
-                          selected
+                          Running on{" "}
+                          {sites.find(
+                            (site) =>
+                              site.id ===
+                              siteTargets[0],
+                          )?.name || "1 website"}
                         </div>
                       )}
 
@@ -6927,12 +6927,12 @@ export default function Campaigns() {
                         >
                           {siteTargetMode === "all"
                             ? "All websites"
-                            : `${siteTargets.length} selected website${
-                                siteTargets.length ===
-                                1
-                                  ? ""
-                                  : "s"
-                              }`}
+                            : sites.find(
+                                (site) =>
+                                  site.id ===
+                                  siteTargets[0],
+                              )?.name ||
+                              "No website selected"}
                         </strong>
 
                         {siteTargetMode ===
@@ -6944,18 +6944,26 @@ export default function Campaigns() {
                                 marginTop: "4px",
                                 fontSize: "11px",
                                 color: "#9AA4B2",
+                                wordBreak: "break-all",
                               }}
                             >
-                              {sites
-                                .filter((site) =>
-                                  siteTargets.includes(
-                                    site.id,
-                                  ),
-                                )
-                                .map(
-                                  (site) => site.name,
-                                )
-                                .join(", ")}
+                              {(() => {
+                                const site =
+                                  sites.find(
+                                    (item) =>
+                                      item.id ===
+                                      siteTargets[0],
+                                  );
+
+                                if (!site) {
+                                  return null;
+                                }
+
+                                return site.kind ===
+                                  "shopify"
+                                  ? "Shopify storefront"
+                                  : site.domain;
+                              })()}
                             </span>
                           )}
                       </div>
