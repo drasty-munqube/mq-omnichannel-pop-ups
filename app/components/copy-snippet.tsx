@@ -105,27 +105,14 @@ export function CodeBlock({
 }
 
 /* ------------------------------------------------------------
-   The one snippet every external website needs. Kept here so
-   Settings and Websites can never drift apart.
-   ------------------------------------------------------------ */
+   The snippet a merchant copies, pinned to one campaign.
+   data-campaign narrows the website down to that campaign only;
+   the campaign's own device, frequency and cooldown rules still
+   apply on top.
 
-export function buildSnippet(
-  appUrl: string,
-  shop: string,
-) {
-  return [
-    "<script",
-    `  src="${appUrl}/mq-widget.js"`,
-    `  data-shop="${shop}"`,
-    "  async",
-    "></script>",
-  ].join("\n");
-}
-
-/* ------------------------------------------------------------
-   Same snippet, pinned to one campaign. data-campaign narrows
-   the website down to that campaign only; the campaign's own
-   device, frequency and cooldown rules still apply on top.
+   There is no shop-wide variant any more: every snippet is
+   handed out from inside a campaign, so the code someone copies
+   is always tied to what they were looking at.
    ------------------------------------------------------------ */
 
 export function buildCampaignSnippet(

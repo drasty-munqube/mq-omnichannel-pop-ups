@@ -54,10 +54,6 @@ export default function App() {
           Analytics
         </Link>
 
-        <Link to="/app/websites">
-          Websites
-        </Link>
-
         <Link to="/app/settings">
           Settings
         </Link>

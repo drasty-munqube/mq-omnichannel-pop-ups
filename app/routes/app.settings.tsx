@@ -1,15 +1,14 @@
-import { Link } from "react-router";
-
 /* ============================================================
    SETTINGS
 
-   The install snippet and the per-platform paste instructions
-   used to live here. They moved to Websites, next to the list
-   of sites they apply to and the per-site install status, so
-   there is one place to answer "where is my code and did it
-   land". What stays here is the Shopify storefront, which does
-   not use the snippet at all, and the handful of rules that
-   decide whether a popup actually appears.
+   Covers the Shopify storefront, which does not use an embed
+   snippet at all, and the rules that decide whether a popup
+   actually appears.
+
+   A campaign's embed snippet for other websites lives in the
+   campaign itself, on the Websites step of the editor, so the
+   code a merchant copies is always tied to the campaign they
+   were looking at.
    ============================================================ */
 
 export default function Settings() {
@@ -18,20 +17,6 @@ export default function Settings() {
       heading="Settings"
       inlineSize="large"
     >
-      {/* ---------- where the snippet lives now ---------- */}
-
-      <s-section>
-        <s-heading>Install code</s-heading>
-
-        <s-paragraph>
-          The embed snippet for other websites, the
-          paste instructions for each platform, and
-          the install status of every site are all
-          under{" "}
-          <Link to="/app/websites">Websites</Link>.
-        </s-paragraph>
-      </s-section>
-
       {/* ---------- shopify storefront ---------- */}
 
       <s-section heading="This Shopify store">

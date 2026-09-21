@@ -1201,7 +1201,7 @@ export default function Campaigns() {
     return options;
   })();
 
-  const totalSteps = 7;
+  const totalSteps = 5;
 
   /* =========================================================
      CAMPAIGN DATA
@@ -1864,12 +1864,14 @@ export default function Campaigns() {
         "Please choose an audience for this campaign.";
     }
 
-    if (step === 3 && !selectedPopup) {
+    /* Popup lives in step 1 (Build) alongside the details. */
+    if (step === 1 && !selectedPopup) {
       stepErrors.selectedPopup =
         "Please select a live popup for this campaign.";
     }
 
-    if (step === 4) {
+    /* Trigger lives in step 2 (Target) alongside the audience. */
+    if (step === 2) {
       if (!selectedTrigger) {
         stepErrors.selectedTrigger =
           "Please choose when this popup should appear.";
@@ -1917,7 +1919,7 @@ export default function Campaigns() {
     }
 
     if (
-      step === 5 &&
+      step === 3 &&
       siteTargetMode === "selected" &&
       siteTargets.length === 0
     ) {
@@ -1925,7 +1927,7 @@ export default function Campaigns() {
         "Select at least one website, or switch to all websites.";
     }
 
-    if (step === 6 && !selectedReward) {
+    if (step === 4 && !selectedReward) {
       stepErrors.selectedReward =
         "Please choose a reward option.";
     }
@@ -3783,10 +3785,8 @@ export default function Campaigns() {
               >
 
                 {[
-                  "Details",
-                  "Audience",
-                  "Popup",
-                  "Trigger",
+                  "Build",
+                  "Target",
                   "Websites",
                   "Reward",
                   "Review",
@@ -3920,7 +3920,7 @@ export default function Campaigns() {
             >
 
               {/* =================================================
-                  STEP 1
+                  STEP 1 — details
               ================================================= */}
 
               {wizardStep === 1 && (
@@ -4001,7 +4001,7 @@ export default function Campaigns() {
                         );
                       }}
                       maxLength={60}
-                      placeholder="e.g. Diwali New Visitors"
+                      placeholder="What are you looking for?"
                       style={{
                         width: "100%",
                         boxSizing: "border-box",
@@ -4154,7 +4154,7 @@ export default function Campaigns() {
 
 
               {/* =================================================
-                  STEP 2
+                  STEP 2 — audience
               ================================================= */}
 
               {wizardStep === 2 && (
@@ -4289,15 +4289,20 @@ export default function Campaigns() {
 
 
               {/* =================================================
-                  STEP 3
+                  STEP 1 (continued) — popup
               ================================================= */}
 
-              {wizardStep === 3 && (
+              {wizardStep === 1 && (
 
                 <div
                   style={{
                     maxWidth: "1040px",
-                    margin: "0 auto",
+                    /* Second half of the merged Build step, so it
+                       needs a rule above it to read as its own
+                       section rather than running on from Details. */
+                    margin: "40px auto 0",
+                    paddingTop: "32px",
+                    borderTop: "1px solid #E7EBEF",
                   }}
                 >
 
@@ -4308,7 +4313,7 @@ export default function Campaigns() {
                       fontWeight: 700,
                     }}
                   >
-                    STEP 3 · POPUP
+                    STEP 1 · POPUP
                   </div>
 
                   <h2
@@ -4760,15 +4765,19 @@ export default function Campaigns() {
 
 
               {/* =================================================
-                  STEP 4
+                  STEP 2 (continued) — trigger
               ================================================= */}
 
-              {wizardStep === 4 && (
+              {wizardStep === 2 && (
 
                 <div
                   style={{
                     maxWidth: "1040px",
-                    margin: "0 auto",
+                    /* Second half of the merged Target step — see
+                       the matching rule in the Build step. */
+                    margin: "40px auto 0",
+                    paddingTop: "32px",
+                    borderTop: "1px solid #E7EBEF",
                   }}
                 >
 
@@ -4779,7 +4788,7 @@ export default function Campaigns() {
                       fontWeight: 700,
                     }}
                   >
-                    STEP 4 · TRIGGER
+                    STEP 2 · TRIGGER
                   </div>
 
                   <h2
@@ -5866,7 +5875,7 @@ export default function Campaigns() {
 
 
               {/* =================================================
-                  STEP 5
+                  STEP 3 — websites
 
                   Page targeting in step 4 is about where inside
                   a storefront a popup shows. This step is about
@@ -5875,7 +5884,7 @@ export default function Campaigns() {
                   more than one site.
               ================================================= */}
 
-              {wizardStep === 5 && (
+              {wizardStep === 3 && (
 
                 <div
                   style={{
@@ -5891,7 +5900,7 @@ export default function Campaigns() {
                       fontWeight: 700,
                     }}
                   >
-                    STEP 5 · WEBSITES
+                    STEP 3 · WEBSITES
                   </div>
 
                   <h2
@@ -6005,9 +6014,9 @@ export default function Campaigns() {
                             borderRadius: "9px",
                           }}
                         >
-                          No websites yet. Add one under
-                          Websites in the left menu, then
-                          come back here.
+                          No websites yet. One appears here
+                          on its own once the snippet below
+                          has loaded on it.
                         </div>
                       ) : (
                         <div
@@ -6119,10 +6128,11 @@ export default function Campaigns() {
                       color: "#9AA4B2",
                     }}
                   >
-                    Websites are added and removed under
-                    Websites in the left menu. Any site
-                    where the snippet is installed shows
-                    up there on its own.
+                    Websites register themselves. Any site
+                    where you paste the snippet below shows
+                    up in this list once it has loaded the
+                    widget, along with your Shopify
+                    storefront.
                   </p>
 
                   {/* =============================================
@@ -6244,10 +6254,10 @@ export default function Campaigns() {
 
 
               {/* =================================================
-                  STEP 6
+                  STEP 4 — reward
               ================================================= */}
 
-              {wizardStep === 6 && (
+              {wizardStep === 4 && (
 
                 <div
                   style={{
@@ -6263,7 +6273,7 @@ export default function Campaigns() {
                       fontWeight: 700,
                     }}
                   >
-                    STEP 6 · REWARD
+                    STEP 4 · REWARD
                   </div>
 
                   <h2
@@ -6613,10 +6623,10 @@ export default function Campaigns() {
 
 
               {/* =================================================
-                  STEP 7
+                  STEP 5 — review
               ================================================= */}
 
-              {wizardStep === 7 && (
+              {wizardStep === 5 && (
 
                 <div
                   style={{
@@ -6632,7 +6642,7 @@ export default function Campaigns() {
                       fontWeight: 700,
                     }}
                   >
-                    STEP 7 · REVIEW
+                    STEP 5 · REVIEW
                   </div>
 
                   <h2

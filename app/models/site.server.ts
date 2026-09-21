@@ -15,6 +15,10 @@ import db from "../db.server";
    widget endpoint, but for targeting purposes it is just
    another row, so the admin can treat every surface the same
    way.
+
+   Sites are never created by hand. They register themselves the
+   first time a hostname calls the widget endpoint, so the list
+   only ever contains websites that really did load the snippet.
    ============================================================ */
 
 export type SiteRecord = {
@@ -113,8 +117,9 @@ export function isStorableDomain(domain: string) {
 
 /* ------------------------------------------------------------
    A shop can only ever accumulate so many auto-detected sites
-   before the list stops being useful. Manual entries are never
-   capped.
+   before the list stops being useful, and since nothing is
+   added by hand this cap is the only thing keeping a stray
+   hostname from filling it.
    ------------------------------------------------------------ */
 
 const AUTO_ADD_LIMIT = 50;
@@ -143,23 +148,6 @@ export async function listSites(
     lastSeenAt: site.lastSeenAt,
     createdAt: site.createdAt,
   }));
-}
-
-export async function findSiteByDomain(
-  shop: string,
-  domain: string,
-) {
-  const normalized = normalizeDomain(domain);
-
-  if (!normalized) {
-    return null;
-  }
-
-  return db.site.findUnique({
-    where: {
-      shop_domain: { shop, domain: normalized },
-    },
-  });
 }
 
 /* ------------------------------------------------------------
@@ -196,173 +184,6 @@ export async function ensureShopifySite(
       autoAdded: false,
     },
   });
-}
-
-/* ------------------------------------------------------------
-   WRITES FROM THE ADMIN
-   ------------------------------------------------------------ */
-
-export async function createSite(
-  shop: string,
-  input: { name?: string; domain?: string },
-) {
-  const domain = normalizeDomain(input.domain);
-
-  if (!isStorableDomain(domain)) {
-    return {
-      ok: false as const,
-      error:
-        "Enter a valid website address, for example example.com.",
-    };
-  }
-
-  const existing = await db.site.findUnique({
-    where: {
-      shop_domain: { shop, domain },
-    },
-  });
-
-  if (existing) {
-    return {
-      ok: false as const,
-      error:
-        "That website is already in the list.",
-    };
-  }
-
-  const site = await db.site.create({
-    data: {
-      shop,
-      name:
-        (input.name || "").trim() || domain,
-      domain,
-      kind: "external",
-      autoAdded: false,
-    },
-  });
-
-  return { ok: true as const, site };
-}
-
-export async function updateSite(
-  shop: string,
-  id: string,
-  input: { name?: string; domain?: string },
-) {
-  const current = await db.site.findFirst({
-    where: { id, shop },
-  });
-
-  if (!current) {
-    return {
-      ok: false as const,
-      error: "Website not found.",
-    };
-  }
-
-  const domain = input.domain
-    ? normalizeDomain(input.domain)
-    : current.domain;
-
-  if (!isStorableDomain(domain)) {
-    return {
-      ok: false as const,
-      error:
-        "Enter a valid website address, for example example.com.",
-    };
-  }
-
-  if (domain !== current.domain) {
-    const clash = await db.site.findUnique({
-      where: {
-        shop_domain: { shop, domain },
-      },
-    });
-
-    if (clash) {
-      return {
-        ok: false as const,
-        error:
-          "Another website in the list already uses that address.",
-      };
-    }
-  }
-
-  const site = await db.site.update({
-    where: { id: current.id },
-    data: {
-      name:
-        (input.name || "").trim() ||
-        current.name,
-      domain,
-      // Editing a detected site makes it a real, owned entry.
-      autoAdded: false,
-    },
-  });
-
-  return { ok: true as const, site };
-}
-
-/* ------------------------------------------------------------
-   Deleting a site also clears it out of every campaign that
-   targeted it, so a campaign can never end up pointing at an
-   id that no longer exists.
-   ------------------------------------------------------------ */
-
-export async function deleteSite(
-  shop: string,
-  id: string,
-) {
-  const site = await db.site.findFirst({
-    where: { id, shop },
-  });
-
-  if (!site) {
-    return {
-      ok: false as const,
-      error: "Website not found.",
-    };
-  }
-
-  if (site.kind === "shopify") {
-    return {
-      ok: false as const,
-      error:
-        "The Shopify storefront cannot be removed.",
-    };
-  }
-
-  const campaigns = await db.campaign.findMany({
-    where: { shop, siteTargetMode: "selected" },
-    select: { id: true, siteTargets: true },
-  });
-
-  for (const campaign of campaigns) {
-    const targets = Array.isArray(
-      campaign.siteTargets,
-    )
-      ? (campaign.siteTargets as string[])
-      : [];
-
-    if (!targets.includes(site.id)) {
-      continue;
-    }
-
-    await db.campaign.update({
-      where: { id: campaign.id },
-      data: {
-        siteTargets: targets.filter(
-          (target) => target !== site.id,
-        ),
-      },
-    });
-  }
-
-  await db.site.delete({
-    where: { id: site.id },
-  });
-
-  return { ok: true as const };
 }
 
 /* ------------------------------------------------------------
