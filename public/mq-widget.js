@@ -180,7 +180,54 @@
      desktop window should behave like the size it actually is.
      ---------------------------------------------------------- */
 
+  /* A ?previewMode=mobile|tablet|desktop parameter on the page
+     wins over the measured width. Kept identical to the Shopify
+     theme embed, where it exists because the theme editor's
+     mobile preview can still report a desktop width — here it
+     doubles as a way to test a campaign's device rules without
+     resizing anything. */
+
+  function previewModeDevice() {
+    var search = "";
+
+    try {
+      search = window.location.search || "";
+    } catch (error) {
+      return null;
+    }
+
+    var match = /[?&]previewMode=([a-zA-Z]+)/.exec(
+      search,
+    );
+
+    if (!match) {
+      return null;
+    }
+
+    var mode = match[1].toLowerCase();
+
+    if (mode === "mobile") {
+      return "mobile";
+    }
+
+    if (mode === "tablet") {
+      return "tablet";
+    }
+
+    if (mode === "desktop" || mode === "full") {
+      return "desktop";
+    }
+
+    return null;
+  }
+
   function currentDevice() {
+    var previewed = previewModeDevice();
+
+    if (previewed) {
+      return previewed;
+    }
+
     var width =
       window.innerWidth ||
       (document.documentElement || {}).clientWidth ||

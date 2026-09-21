@@ -202,7 +202,82 @@
     return true;
   }
 
-  function currentDevice() {
+  /* ----------------------------------------------------------
+     DEVICE DETECTION
+
+     Real visitors are judged purely on width. Shopify's theme
+     editor is the exception: it renders the mobile preview at a
+     narrow size on screen while the preview iframe can still
+     report a desktop width, so width alone mis-detects there and
+     a desktop-only campaign would wrongly appear in the mobile
+     preview.
+
+     The editor carries the chosen device in the admin URL as
+     previewMode=mobile (desktop preview carries no parameter at
+     all). That URL belongs to admin.shopify.com, which this
+     iframe cannot read directly — cross-origin. So we look at
+     the two places the value can legitimately reach us: our own
+     query string, and document.referrer (the admin page that
+     framed us). Every lookup is wrapped, because a blocked
+     referrer policy must never break the widget.
+     ---------------------------------------------------------- */
+
+  function inThemeEditor() {
+    try {
+      return Boolean(
+        window.Shopify && window.Shopify.designMode,
+      );
+    } catch (error) {
+      return false;
+    }
+  }
+
+  function previewModeDevice() {
+    var sources = [];
+
+    try {
+      sources.push(window.location.search || "");
+    } catch (error) {
+      /* ignore */
+    }
+
+    try {
+      sources.push(document.referrer || "");
+    } catch (error) {
+      /* ignore */
+    }
+
+    for (var i = 0; i < sources.length; i += 1) {
+      var match = /[?&]previewMode=([a-zA-Z]+)/.exec(
+        sources[i],
+      );
+
+      if (!match) {
+        continue;
+      }
+
+      var mode = match[1].toLowerCase();
+
+      if (mode === "mobile") {
+        return "mobile";
+      }
+
+      if (mode === "tablet") {
+        return "tablet";
+      }
+
+      if (
+        mode === "desktop" ||
+        mode === "full"
+      ) {
+        return "desktop";
+      }
+    }
+
+    return null;
+  }
+
+  function widthDevice() {
     var width =
       window.innerWidth ||
       (document.documentElement || {}).clientWidth ||
@@ -219,6 +294,23 @@
     return "desktop";
   }
 
+  function currentDevice() {
+    var previewed = previewModeDevice();
+
+    if (previewed) {
+      return previewed;
+    }
+
+    /* Inside the editor with no previewMode in sight, the
+       merchant is on the desktop preview — that is the view the
+       editor opens with and the one it drops the parameter for. */
+    if (inThemeEditor()) {
+      return "desktop";
+    }
+
+    return widthDevice();
+  }
+
   function matchesDevices(campaign) {
     var devices = campaign.devices;
 
@@ -230,9 +322,25 @@
       return true;
     }
 
-    return (
-      devices.indexOf(currentDevice()) !== -1
-    );
+    var device = currentDevice();
+    var allowed = devices.indexOf(device) !== -1;
+
+    /* Only ever noisy inside the editor, where a merchant is
+       actively checking why a popup did or didn't appear. */
+    if (inThemeEditor()) {
+      console.log(
+        "[MQ Popups] device=" +
+          device +
+          " campaign=" +
+          (campaign.popupName || campaign.campaignId) +
+          " allows=" +
+          devices.join(",") +
+          " -> " +
+          (allowed ? "shown" : "hidden"),
+      );
+    }
+
+    return allowed;
   }
 
   function viewCount(campaignId) {
