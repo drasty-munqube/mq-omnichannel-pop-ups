@@ -931,7 +931,7 @@ export default function Popups() {
 
   return (
     <>
-    <s-page heading="Popups" inlineSize="large">
+    <s-page inlineSize="large">
 
       {/* =====================================================
           PAGE HEADER

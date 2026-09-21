@@ -235,8 +235,12 @@ export default function Index() {
     return campaign.trigger.toLowerCase();
   };
 
+  /* No `heading` on <s-page> on purpose: the page renders its
+     own <h1> below, and setting both draws a second title bar
+     above it that only eats vertical space. */
+
   return (
-    <s-page heading="Home" inlineSize="large">
+    <s-page inlineSize="large">
 
       {/* =====================================================
           PAGE HEADER

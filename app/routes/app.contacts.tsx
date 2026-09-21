@@ -59,7 +59,7 @@ export default function Contacts() {
     });
 
   return (
-    <s-page heading="Contacts" inlineSize="large">
+    <s-page inlineSize="large">
 
       <s-section>
 

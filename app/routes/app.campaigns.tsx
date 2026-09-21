@@ -1143,6 +1143,33 @@ export default function Campaigns() {
     }
   }, [wizardStep]);
 
+  /* While the wizard covers the screen, the page underneath must
+     stop scrolling — otherwise its scrollbar sits alongside the
+     wizard's own and you get two of them. Both html and body are
+     set because which one scrolls differs between the embedded
+     admin frame and a plain browser tab. */
+  useEffect(() => {
+    if (!showWizard) {
+      return;
+    }
+
+    const html = document.documentElement;
+    const body = document.body;
+
+    const previous = {
+      html: html.style.overflow,
+      body: body.style.overflow,
+    };
+
+    html.style.overflow = "hidden";
+    body.style.overflow = "hidden";
+
+    return () => {
+      html.style.overflow = previous.html;
+      body.style.overflow = previous.body;
+    };
+  }, [showWizard]);
+
   /* =========================================================
      THE PAGE LIST A MERCHANT RECOGNISES
 
@@ -2077,7 +2104,7 @@ export default function Campaigns() {
       : "Campaign";
 
   return (
-    <s-page heading="Campaigns" inlineSize="large">
+    <s-page inlineSize="large">
 
       {/* =====================================================
           CAMPAIGNS HEADER
