@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type {
   ActionFunctionArgs,
   LoaderFunctionArgs,
@@ -1129,6 +1129,19 @@ export default function Campaigns() {
   const [showWizard, setShowWizard] = useState(false);
 
   const [wizardStep, setWizardStep] = useState(1);
+
+  /* The step content is the only scrolling part of the wizard.
+     Without this, moving to the next step keeps whatever scroll
+     position the previous one had, so a long step can open the
+     next one already scrolled past its heading. */
+  const wizardContentRef =
+    useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (wizardContentRef.current) {
+      wizardContentRef.current.scrollTop = 0;
+    }
+  }, [wizardStep]);
 
   /* =========================================================
      THE PAGE LIST A MERCHANT RECOGNISES
@@ -3665,14 +3678,19 @@ export default function Campaigns() {
             inset: 0,
             zIndex: 10000,
             background: "#F6F6F7",
-            overflowY: "auto",
+            /* The panel itself owns the scrolling now, so the
+               overlay must not scroll as well — otherwise the
+               footer rides up out of view. */
+            overflow: "hidden",
             padding: "20px",
+            boxSizing: "border-box",
           }}
         >
 
           <div
             style={{
               width: "100%",
+              height: "100%",
               margin: "0 auto",
               background: "#FFFFFF",
               border: "1px solid #D8DEE6",
@@ -3680,6 +3698,12 @@ export default function Campaigns() {
               boxShadow:
                 "0 20px 60px rgba(0,0,0,0.12)",
               overflow: "hidden",
+              /* Header and stepper pinned at the top, footer
+                 pinned at the bottom, only the step content in
+                 the middle scrolls. */
+              display: "flex",
+              flexDirection: "column",
+              boxSizing: "border-box",
             }}
           >
 
@@ -3694,6 +3718,7 @@ export default function Campaigns() {
                 display: "flex",
                 justifyContent: "space-between",
                 alignItems: "center",
+                flexShrink: 0,
               }}
             >
 
@@ -3771,6 +3796,7 @@ export default function Campaigns() {
               style={{
                 padding: "20px 28px",
                 borderBottom: "1px solid #E7EBEF",
+                flexShrink: 0,
               }}
             >
 
@@ -3911,9 +3937,17 @@ export default function Campaigns() {
             ================================================= */}
 
             <div
+              ref={wizardContentRef}
               style={{
                 padding: "45px",
-                minHeight: "430px",
+                /* The only scrolling region. flex:1 takes the
+                   space left between the stepper and the footer;
+                   minHeight:0 is what actually lets a flex child
+                   shrink enough to scroll instead of pushing the
+                   footer off-screen. */
+                flex: 1,
+                minHeight: 0,
+                overflowY: "auto",
               }}
             >
 
@@ -7063,6 +7097,10 @@ export default function Campaigns() {
             <div
               style={{
                 borderTop: "1px solid #E7EBEF",
+                /* Always visible: Back / Save as draft / Next
+                   should never require scrolling to reach. */
+                flexShrink: 0,
+                background: "#FFFFFF",
               }}
             >
 
