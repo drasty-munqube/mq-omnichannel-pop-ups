@@ -14,6 +14,7 @@ export type EligibleCampaign = {
   campaignId: string;
   popupId: string;
   popupName: string;
+  audience: string;
   trigger: string;
   triggerDelaySeconds: number;
   triggerScrollPercent: number;
@@ -142,6 +143,10 @@ export async function getEligibleCampaigns(
         campaignId: campaign.id,
         popupId: popup.id,
         popupName: popup.name,
+        /* Audience is chosen in the Target step and was, until
+           now, never sent to the widget — so it was stored but
+           never enforced. */
+        audience: campaign.audience,
         trigger: campaign.trigger,
         triggerDelaySeconds:
           campaign.triggerDelaySeconds,

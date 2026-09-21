@@ -21,6 +21,11 @@
   var pageHandle = root.dataset.pageHandle || "";
   var proxyPath = root.dataset.proxyPath || "/apps/mq-popups";
 
+  /* Liquid knows whether a customer is signed in, so "Customers"
+     targeting can be honoured properly on the storefront. */
+  var isLoggedInCustomer =
+    root.dataset.customer === "true";
+
   var DEFAULT_SETTINGS = {
     bodyBackground: "#FFFFFF",
     headerBackground: "#1F2937",
@@ -108,7 +113,11 @@
     return false;
   }
 
-  function isReturningVisitor() {
+  /* Read ONCE, before markVisited() runs. Reading it later would
+     always say "returning", because boot marks this visit as
+     seen — which silently made "New visitors" targeting match
+     nobody at all. */
+  var wasReturningVisitor = (function () {
     try {
       return (
         window.localStorage.getItem("mq_seen") === "1"
@@ -116,7 +125,7 @@
     } catch (error) {
       return false;
     }
-  }
+  })();
 
   function markVisited() {
     try {
@@ -149,16 +158,47 @@
      sites never disagree about who sees what. */
 
   function matchesAudience(settings) {
-    var returning = isReturningVisitor();
-
-    if (settings.audienceNewOnly && returning) {
+    if (
+      settings.audienceNewOnly &&
+      wasReturningVisitor
+    ) {
       return false;
     }
 
-    if (settings.audienceReturningOnly && !returning) {
+    if (
+      settings.audienceReturningOnly &&
+      !wasReturningVisitor
+    ) {
       return false;
     }
 
+    return true;
+  }
+
+  /* ----------------------------------------------------------
+     CAMPAIGN AUDIENCE
+
+     The Target step's audience choice, enforced here for the
+     first time. On the storefront "Customers" is knowable —
+     Liquid tells us whether someone is logged in.
+     ---------------------------------------------------------- */
+
+  function matchesCampaignAudience(campaign) {
+    var audience = campaign.audience || "";
+
+    if (audience === "New visitors") {
+      return !wasReturningVisitor;
+    }
+
+    if (audience === "Returning visitors") {
+      return wasReturningVisitor;
+    }
+
+    if (audience === "Customers") {
+      return isLoggedInCustomer;
+    }
+
+    /* "All visitors", empty, or anything unrecognised. */
     return true;
   }
 
@@ -904,6 +944,10 @@
         }
 
         if (!matchesDevices(campaign)) {
+          continue;
+        }
+
+        if (!matchesCampaignAudience(campaign)) {
           continue;
         }
 

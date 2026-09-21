@@ -59,6 +59,15 @@
 
   var apiUrl = apiOrigin + "/api/widget";
 
+  /* A plain website has no idea who is logged in, so "Customers"
+     targeting is off unless the host page declares it:
+       <script ... data-customer="true">
+     The Shopify theme embed knows this natively and sets it from
+     Liquid. */
+  var isLoggedInCustomer =
+    thisScript.getAttribute("data-customer") ===
+    "true";
+
   var DEFAULT_SETTINGS = {
     bodyBackground: "#FFFFFF",
     headerBackground: "#1F2937",
@@ -102,29 +111,64 @@
     }
   }
 
-  function isReturningVisitor() {
-    return safeGet(STORAGE_PREFIX + "seen") === "1";
-  }
+  /* Read ONCE, before markVisited() runs. Reading it later would
+     always say "returning", because boot marks this visit as
+     seen — which silently made "New visitors" targeting match
+     nobody at all. */
+  var wasReturningVisitor =
+    safeGet(STORAGE_PREFIX + "seen") === "1";
 
   function markVisited() {
     safeSet(STORAGE_PREFIX + "seen", "1");
   }
 
-  /* New-vs-returning still lives on the popup. Device targeting
-     used to live here too and no longer does — it is a campaign
-     setting now, handled by matchesDevices below. */
+  /* The popup's own Logic tab can also narrow new-vs-returning.
+     Device targeting used to live here too and no longer does —
+     it is a campaign setting now, handled by matchesDevices. */
 
   function matchesAudience(settings) {
-    var returning = isReturningVisitor();
-
-    if (settings.audienceNewOnly && returning) {
+    if (
+      settings.audienceNewOnly &&
+      wasReturningVisitor
+    ) {
       return false;
     }
 
-    if (settings.audienceReturningOnly && !returning) {
+    if (
+      settings.audienceReturningOnly &&
+      !wasReturningVisitor
+    ) {
       return false;
     }
 
+    return true;
+  }
+
+  /* ----------------------------------------------------------
+     CAMPAIGN AUDIENCE
+
+     The Target step's audience choice, enforced here for the
+     first time. "Customers" cannot be established on a site
+     that is not the Shopify storefront, so such a campaign
+     stays hidden rather than showing to the wrong people.
+     ---------------------------------------------------------- */
+
+  function matchesCampaignAudience(campaign) {
+    var audience = campaign.audience || "";
+
+    if (audience === "New visitors") {
+      return !wasReturningVisitor;
+    }
+
+    if (audience === "Returning visitors") {
+      return wasReturningVisitor;
+    }
+
+    if (audience === "Customers") {
+      return isLoggedInCustomer;
+    }
+
+    /* "All visitors", empty, or anything unrecognised. */
     return true;
   }
 
@@ -907,6 +951,10 @@
           }
 
           if (!matchesDevices(campaign)) {
+            continue;
+          }
+
+          if (!matchesCampaignAudience(campaign)) {
             continue;
           }
 
