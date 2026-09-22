@@ -623,6 +623,171 @@
   }
 
   /* ------------------------------------------------------------
+     EVENTS
+
+     Views and dismissals are reported so the admin can work out
+     a conversion rate. Submissions are not reported from here:
+     the server writes that event itself when it saves the
+     contact, which is the only moment it can be sure one really
+     happened.
+
+     sendBeacon is tried first because a dismissal is often the
+     last thing to happen before the page goes away, and a normal
+     fetch gets cancelled at that point.
+
+     Nothing is reported from the theme editor. A merchant
+     opening Customize to look at their own popup would otherwise
+     show up as real storefront traffic and drag the conversion
+     rate down.
+  ------------------------------------------------------------ */
+
+  var eventUrl =
+    proxyPath +
+    "/popups?shop=" +
+    encodeURIComponent(shop);
+
+  function sendEvent(campaign, type) {
+    if (inThemeEditor()) {
+      return;
+    }
+
+    var body;
+
+    try {
+      body = JSON.stringify({
+        type: type,
+        campaignId: campaign.campaignId,
+        popupId: campaign.popupId,
+        device: currentDevice(),
+        pageUrl: window.location.href,
+      });
+    } catch (error) {
+      return;
+    }
+
+    try {
+      if (navigator.sendBeacon) {
+        var blob = new Blob([body], {
+          type: "application/json",
+        });
+
+        if (navigator.sendBeacon(eventUrl, blob)) {
+          return;
+        }
+      }
+    } catch (error) {
+      /* fall through to fetch */
+    }
+
+    try {
+      fetch(eventUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: body,
+        keepalive: true,
+      }).catch(function () {});
+    } catch (error) {
+      /* the storefront never breaks over a analytics ping */
+    }
+  }
+
+  /* ------------------------------------------------------------
+     EXIT INTENT
+
+     Two gestures mean "I am leaving", depending on what the
+     shopper is holding. With a mouse it is the pointer crossing
+     the top edge of the window on its way to the address bar or
+     the tab strip. On a phone there is no pointer to watch, so
+     the signal is a fast upward flick after they have already
+     read some way down the page.
+
+     It fires once and then stops listening, so a mouse that
+     wanders in and out of the window does not reopen the popup
+     again and again.
+  ------------------------------------------------------------ */
+
+  function onExitIntent(run) {
+    var fired = false;
+    var samples = [];
+
+    function cleanup() {
+      document.removeEventListener(
+        "mouseout",
+        onMouseOut,
+      );
+      window.removeEventListener(
+        "scroll",
+        onScroll,
+      );
+    }
+
+    function fire() {
+      if (fired) {
+        return;
+      }
+      fired = true;
+      cleanup();
+      run();
+    }
+
+    function onMouseOut(event) {
+      /* clientY above the viewport means the pointer left over
+         the top edge. A relatedTarget means it merely moved
+         onto another element, which is not leaving at all. */
+      if (event.clientY > 0) {
+        return;
+      }
+      if (event.relatedTarget) {
+        return;
+      }
+      fire();
+    }
+
+    function onScroll() {
+      var y =
+        window.pageYOffset ||
+        (document.documentElement || {})
+          .scrollTop ||
+        0;
+
+      var now = Date.now();
+
+      samples.push({ y: y, at: now });
+
+      while (
+        samples.length &&
+        now - samples[0].at > 600
+      ) {
+        samples.shift();
+      }
+
+      if (samples.length < 2) {
+        return;
+      }
+
+      var oldest = samples[0];
+
+      /* Went at least a screen into the page, then flicked back
+         up more than 150px inside 600ms. A slow scroll back to
+         the top reads as browsing, not leaving. */
+      if (
+        oldest.y > 200 &&
+        oldest.y - y > 150
+      ) {
+        fire();
+      }
+    }
+
+    document.addEventListener(
+      "mouseout",
+      onMouseOut,
+    );
+    window.addEventListener("scroll", onScroll);
+  }
+
+  /* ------------------------------------------------------------
      WIDGET
   ------------------------------------------------------------ */
 
@@ -651,6 +816,7 @@
         campaignId: campaign.campaignId,
         email: email,
         fields: fieldValues,
+        device: currentDevice(),
         pageUrl: window.location.href,
       }),
     })
@@ -665,6 +831,21 @@
   function buildWidget(campaign) {
     var settings = popupSettingsFor(campaign.steps);
     var overlay = null;
+
+    /* A shopper who filled the form in has converted, so closing
+       the Success step afterwards is not a dismissal. And a
+       dismissal is reported at most once per page load, however
+       many ways there are to close the thing. */
+    var submitted = false;
+    var dismissSent = false;
+
+    function reportDismiss() {
+      if (submitted || dismissSent) {
+        return;
+      }
+      dismissSent = true;
+      sendEvent(campaign, "dismiss");
+    }
 
     var pill = el("div", {
       position: "fixed",
@@ -744,6 +925,7 @@
     ) {
       event.stopPropagation();
       markDismissed(campaign.campaignId);
+      reportDismiss();
       pill.remove();
     });
 
@@ -923,6 +1105,7 @@
         function () {
           /* They gave us their details, so the "if collected"
              cooldown starts now. */
+          submitted = true;
           markCollected(campaign.campaignId);
           showStep("success");
         },
@@ -942,6 +1125,7 @@
 
     function closeOverlay() {
       if (overlay) {
+        reportDismiss();
         overlay.remove();
         overlay = null;
       }
@@ -1000,12 +1184,15 @@
       if (!counted) {
         counted = true;
         markViewed(campaign.campaignId);
+        sendEvent(campaign, "view");
       }
 
       document.body.appendChild(pill);
     }
 
-    if (campaign.trigger === "After delay") {
+    if (campaign.trigger === "Exit intent") {
+      onExitIntent(showTeaser);
+    } else if (campaign.trigger === "After delay") {
       window.setTimeout(
         showTeaser,
         campaign.triggerDelaySeconds * 1000,

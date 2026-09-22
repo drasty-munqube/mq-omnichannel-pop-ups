@@ -4,6 +4,12 @@ import { useLoaderData, useNavigate } from "react-router";
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
 import {
+  addCount,
+  conversionRate,
+  emptyCounts,
+  formatRate,
+} from "../models/analytics";
+import {
   color,
   radius,
   space,
@@ -37,19 +43,47 @@ export async function loader({
   const { session } =
     await authenticate.admin(request);
 
-  const [campaigns, popups] = await Promise.all([
-    db.campaign.findMany({
-      where: { shop: session.shop },
-      orderBy: [
-        { status: "asc" },
-        { updatedAt: "desc" },
-      ],
-    }),
-    db.popup.findMany({
-      where: { shop: session.shop },
-      orderBy: { updatedAt: "desc" },
-    }),
-  ]);
+  /* The opt-in rate covers the last 30 days rather than all
+     time. All time would keep quoting a number earned months
+     ago long after the campaigns behind it were changed, which
+     is the least useful version of this figure. */
+
+  const since = new Date();
+  since.setUTCHours(0, 0, 0, 0);
+  since.setUTCDate(since.getUTCDate() - 29);
+
+  const [campaigns, popups, events] =
+    await Promise.all([
+      db.campaign.findMany({
+        where: { shop: session.shop },
+        orderBy: [
+          { status: "asc" },
+          { updatedAt: "desc" },
+        ],
+      }),
+      db.popup.findMany({
+        where: { shop: session.shop },
+        orderBy: { updatedAt: "desc" },
+      }),
+      db.popupEvent.groupBy({
+        by: ["type"],
+        where: {
+          shop: session.shop,
+          createdAt: { gte: since },
+        },
+        _count: { _all: true },
+      }),
+    ]);
+
+  const eventTotals = emptyCounts();
+
+  for (const row of events) {
+    addCount(
+      eventTotals,
+      row.type,
+      row._count._all,
+    );
+  }
 
   const liveCampaigns = campaigns.filter(
     (campaign) =>
@@ -62,6 +96,14 @@ export async function loader({
   );
 
   return {
+    optInRate: formatRate(
+      conversionRate(
+        eventTotals.view,
+        eventTotals.submit,
+      ),
+    ),
+    optInViews: eventTotals.view,
+
     campaignCount: campaigns.length,
     liveCampaignCount: liveCampaigns.length,
     popupCount: popups.length,
@@ -202,6 +244,8 @@ function MetricTile({
 
 export default function Index() {
   const {
+    optInRate,
+    optInViews,
     campaignCount,
     liveCampaignCount,
     popupCount,
@@ -338,16 +382,22 @@ export default function Index() {
 
         <MetricTile
           label="Opt-in rate"
-          value="—"
-          caption="Needs conversion tracking"
+          value={optInRate}
+          caption={
+            optInViews > 0
+              ? `${optInViews} view${
+                  optInViews === 1 ? "" : "s"
+                } in the last 30 days`
+              : "No views recorded yet"
+          }
           tone="neutral"
-          available={false}
+          available={optInViews > 0}
         />
 
         <MetricTile
           label="Attributed revenue"
           value="—"
-          caption="Needs conversion tracking"
+          caption="Needs order tracking"
           tone="neutral"
           available={false}
         />

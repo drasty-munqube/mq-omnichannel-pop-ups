@@ -6,6 +6,7 @@ import type {
 import db from "../db.server";
 import {
   getEligibleCampaigns,
+  recordEvent,
   saveSubmission,
 } from "../models/popup-widget.server";
 import { touchSite } from "../models/site.server";
@@ -113,6 +114,8 @@ export async function action({
 
   let body: {
     shop?: string;
+    type?: string;
+    device?: string;
     popupId?: string;
     popupName?: string;
     campaignId?: string;
@@ -140,8 +143,19 @@ export async function action({
     );
   }
 
+  /* Same endpoint, two payloads: an event carries a "type"
+     ("view" or "dismiss"), a submission carries the shopper's
+     details. One route keeps the embed snippet to a single
+     origin, which matters when a merchant has to get it past
+     their own site's content security policy. */
+
+  if (typeof body.type === "string") {
+    await recordEvent(shop, "external", body);
+    return json({ ok: true });
+  }
+
   try {
-    await saveSubmission(shop, body);
+    await saveSubmission(shop, body, "external");
     return json({ ok: true });
   } catch (error) {
     console.error(

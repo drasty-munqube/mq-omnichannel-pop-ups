@@ -84,6 +84,7 @@ export const action = async ({
         db.campaign.deleteMany({ where: { shop } }),
         db.popup.deleteMany({ where: { shop } }),
         db.site.deleteMany({ where: { shop } }),
+        db.popupEvent.deleteMany({ where: { shop } }),
       ]);
 
       break;

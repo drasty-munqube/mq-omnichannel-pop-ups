@@ -6,6 +6,7 @@ import type {
 import { authenticate } from "../shopify.server";
 import {
   getEligibleCampaigns,
+  recordEvent,
   saveSubmission,
 } from "../models/popup-widget.server";
 import { ensureShopifySite } from "../models/site.server";
@@ -102,8 +103,19 @@ export async function action({
     );
   }
 
+  /* Two different things arrive on this one endpoint. An event
+     carries a "type" ("view" or "dismiss") and is fire and
+     forget; a submission carries the shopper's details. Keeping
+     them on one route means the theme app embed only ever needs
+     the single proxy path it already has. */
+
+  if (body && typeof body.type === "string") {
+    await recordEvent(shop, "shopify", body);
+    return Response.json({ ok: true });
+  }
+
   try {
-    await saveSubmission(shop, body);
+    await saveSubmission(shop, body, "shopify");
     return Response.json({ ok: true });
   } catch (error) {
     console.error(

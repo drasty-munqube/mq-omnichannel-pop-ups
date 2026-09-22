@@ -145,6 +145,104 @@ export async function action({
     }
   }
 
+  /* ----------------------------------------------------------
+     DUPLICATE
+
+     Building a second popup that is almost the first one is the
+     normal way these get made: one for desktop and one for
+     mobile, or a seasonal variant of something that already
+     works. Without this a merchant rebuilds it block by block.
+
+     The copy always lands as a draft, whatever the original
+     was, so duplicating something live cannot put an unreviewed
+     popup in front of shoppers. It goes to the end of the
+     priority order for the same reason.
+     ---------------------------------------------------------- */
+
+  if (intent === "duplicate") {
+    const popupId =
+      String(
+        formData.get("popupId") || "",
+      ).trim();
+
+    if (!popupId) {
+      return {
+        ok: false,
+        error: "Popup ID is required.",
+      };
+    }
+
+    try {
+      const popup =
+        await db.popup.findFirst({
+          where: {
+            id: popupId,
+            shop: session.shop,
+          },
+        });
+
+      if (!popup) {
+        return {
+          ok: false,
+          error: "Popup not found.",
+        };
+      }
+
+      const last =
+        await db.popup.findFirst({
+          where: { shop: session.shop },
+          orderBy: { priority: "desc" },
+          select: { priority: true },
+        });
+
+      /* "Welcome offer" becomes "Welcome offer (copy)", then
+         "(copy 2)", so duplicating the same popup twice does
+         not produce two rows with identical names. */
+
+      const base = `${popup.name} (copy`;
+
+      const existing =
+        await db.popup.count({
+          where: {
+            shop: session.shop,
+            name: { startsWith: base },
+          },
+        });
+
+      const name =
+        existing === 0
+          ? `${popup.name} (copy)`
+          : `${popup.name} (copy ${existing + 1})`;
+
+      const created =
+        await db.popup.create({
+          data: {
+            shop: session.shop,
+            name,
+            status: "draft",
+            priority: (last?.priority || 0) + 1,
+            steps: popup.steps as object,
+          },
+        });
+
+      return {
+        ok: true,
+        popupId: created.id,
+        intent: "duplicate" as const,
+      };
+    } catch (error) {
+      console.error(
+        "DUPLICATE POPUP ERROR:",
+        error,
+      );
+
+      return {
+        ok: false,
+        error: "Unable to duplicate popup.",
+      };
+    }
+  }
+
   if (intent === "toggleStatus") {
     const popupId =
       String(
@@ -437,6 +535,18 @@ export default function Popups() {
         )
       : "";
 
+  const duplicating =
+    navigation.state === "submitting" &&
+    navigation.formData?.get("intent") ===
+      "duplicate";
+
+  const duplicatingPopupId =
+    duplicating
+      ? String(
+          navigation.formData?.get("popupId") || "",
+        )
+      : "";
+
   useEffect(() => {
     if (!actionData?.ok) {
       return;
@@ -446,7 +556,8 @@ export default function Popups() {
       actionData.intent === "delete" ||
       actionData.intent === "bulkDelete" ||
       actionData.intent === "toggleStatus" ||
-      actionData.intent === "reorder"
+      actionData.intent === "reorder" ||
+      actionData.intent === "duplicate"
     ) {
       if (actionData.intent === "bulkDelete") {
         setSelectedIds(new Set());
@@ -653,6 +764,33 @@ export default function Popups() {
   const cancelDeletePopup =
     () => {
       setPopupPendingDelete(null);
+    };
+
+  /* No confirmation step: a duplicate creates a draft and
+     changes nothing a shopper can see, so the cost of an
+     accidental click is one row to delete. */
+
+  const handleDuplicatePopup =
+    (id: string) => {
+      const formData =
+        new FormData();
+
+      formData.append(
+        "intent",
+        "duplicate",
+      );
+
+      formData.append(
+        "popupId",
+        id,
+      );
+
+      submit(
+        formData,
+        {
+          method: "post",
+        },
+      );
     };
 
   const confirmDeletePopup =
@@ -2119,6 +2257,54 @@ export default function Popups() {
                       }}
                     >
                       Edit
+                    </button>
+
+                    <button
+                      type="button"
+                      disabled={
+                        duplicating &&
+                        duplicatingPopupId ===
+                          popup.id
+                      }
+                      onClick={() =>
+                        handleDuplicatePopup(
+                          popup.id
+                        )
+                      }
+                      style={{
+                        border:
+                          "1px solid #D8DEE6",
+                        background:
+                          "#FFFFFF",
+                        color:
+                          "#374151",
+                        borderRadius:
+                          "7px",
+                        padding:
+                          "7px 11px",
+                        fontSize:
+                          "11px",
+                        fontWeight:
+                          700,
+                        cursor:
+                          duplicating &&
+                          duplicatingPopupId ===
+                            popup.id
+                            ? "not-allowed"
+                            : "pointer",
+                        opacity:
+                          duplicating &&
+                          duplicatingPopupId ===
+                            popup.id
+                            ? 0.6
+                            : 1,
+                      }}
+                    >
+                      {duplicating &&
+                      duplicatingPopupId ===
+                        popup.id
+                        ? "Copying..."
+                        : "Duplicate"}
                     </button>
 
                     <button

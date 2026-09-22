@@ -80,7 +80,10 @@ export default function Settings() {
             Triggers still apply. If a campaign
             waits for a scroll depth or a delay,
             the popup appears only once that is
-            reached.
+            reached. An exit-intent campaign waits
+            for the visitor to look like they are
+            leaving, so it will not appear at all
+            on a page nobody scrolls or leaves.
           </s-list-item>
         </s-unordered-list>
       </s-section>

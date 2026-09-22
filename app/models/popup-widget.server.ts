@@ -179,6 +179,7 @@ export async function getEligibleCampaigns(
 
 export type SubmissionInput = {
   popupId?: string;
+  device?: string;
   popupName?: string;
   campaignId?: string;
   email?: string;
@@ -190,6 +191,7 @@ export type SubmissionInput = {
 export async function saveSubmission(
   shop: string,
   body: SubmissionInput,
+  source: EventSource = "shopify",
 ) {
   const fields = body.fields || {};
 
@@ -212,4 +214,102 @@ export async function saveSubmission(
       pageUrl: body.pageUrl || null,
     },
   });
+
+  /* The submit event is written here rather than sent by the
+     widget, because this is the one moment the server can be
+     certain a submission really happened. A browser-sent event
+     can be lost to a navigation, blocked, or replayed; a Contact
+     row and its matching event are written by the same call. */
+
+  await recordEvent(shop, source, {
+    campaignId: body.campaignId,
+    popupId: body.popupId,
+    type: "submit",
+    device: body.device,
+    pageUrl: body.pageUrl,
+  });
+}
+
+/* ============================================================
+   EVENTS
+
+   Contacts only records the people who said yes, so on its own
+   it can never answer "what share of the people who saw this
+   actually converted". These rows are the denominator: one per
+   impression, submission and dismissal.
+
+   Nothing here is allowed to throw. Analytics is a reporting
+   feature, and a failure to record a number must never stop a
+   campaign from being served or a shopper's details from being
+   saved.
+   ============================================================ */
+
+export type EventSource = "shopify" | "external";
+
+const EVENT_TYPES = [
+  "view",
+  "submit",
+  "dismiss",
+];
+
+export type EventInput = {
+  campaignId?: string;
+  popupId?: string;
+  type?: string;
+  device?: string;
+  pageUrl?: string;
+};
+
+/* Page URLs come from arbitrary websites, so they are capped
+   before they reach the database. 2048 is the longest URL any
+   mainstream browser will produce. */
+const MAX_PAGE_URL = 2048;
+
+export async function recordEvent(
+  shop: string,
+  source: EventSource,
+  input: EventInput,
+) {
+  const type = String(input.type || "");
+
+  /* An unknown type would quietly corrupt every total that
+     counts by type, so it is dropped rather than stored. */
+  if (!EVENT_TYPES.includes(type)) {
+    return false;
+  }
+
+  const campaignId = String(
+    input.campaignId || "",
+  );
+
+  if (!campaignId) {
+    return false;
+  }
+
+  const device = String(input.device || "");
+
+  const pageUrl = input.pageUrl
+    ? String(input.pageUrl).slice(0, MAX_PAGE_URL)
+    : null;
+
+  try {
+    await db.popupEvent.create({
+      data: {
+        shop,
+        campaignId,
+        popupId: input.popupId || null,
+        type,
+        device: ALL_DEVICES.includes(device)
+          ? device
+          : null,
+        source,
+        pageUrl,
+      },
+    });
+
+    return true;
+  } catch (error) {
+    console.error("POPUP EVENT ERROR:", error);
+    return false;
+  }
 }

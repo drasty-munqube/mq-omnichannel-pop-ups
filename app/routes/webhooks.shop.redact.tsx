@@ -23,6 +23,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     db.campaign.deleteMany({ where: { shop } }),
     db.popup.deleteMany({ where: { shop } }),
     db.site.deleteMany({ where: { shop } }),
+    db.popupEvent.deleteMany({ where: { shop } }),
   ]);
 
   return new Response();

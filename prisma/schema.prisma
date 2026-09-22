@@ -115,3 +115,35 @@ model Contact {
 
   @@index([shop, createdAt])
 }
+
+// One row per thing a popup did in a shopper's browser: it was shown,
+// it was submitted, or it was closed. Nothing else in the app records
+// impressions, so without this table a conversion rate cannot be
+// calculated at all — Contacts only tells you about the people who
+// said yes.
+//
+// Append-only. Rows are never updated, and the Analytics screen reads
+// them by aggregating over a date window.
+model PopupEvent {
+  id         String   @id @default(cuid())
+  shop       String
+  campaignId String
+  popupId    String?
+
+  // "view" | "submit" | "dismiss"
+  type       String
+
+  // Which width bucket the shopper was in, so a merchant can see that
+  // a campaign converts on desktop but not on mobile.
+  device     String?
+
+  // "shopify" for the theme app embed, "external" for a website
+  // running the universal snippet.
+  source     String   @default("shopify")
+
+  pageUrl    String?
+  createdAt  DateTime @default(now())
+
+  @@index([shop, createdAt])
+  @@index([shop, campaignId, type])
+}

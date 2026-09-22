@@ -4897,6 +4897,10 @@ export default function Campaigns() {
                         title: "Scroll depth",
                         text: `Show after the visitor scrolls ${triggerScrollPercent}% of the page.`,
                       },
+                      {
+                        title: "Exit intent",
+                        text: "Show when the visitor looks like they are about to leave. On a computer that is the mouse heading for the address bar; on a phone, a fast flick back up the page.",
+                      },
                     ].map((item) => (
 
                       <div key={item.title}>
