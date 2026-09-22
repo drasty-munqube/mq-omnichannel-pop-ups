@@ -46,11 +46,18 @@ function normalizeDevices(value: unknown) {
     return ALL_DEVICES;
   }
 
-  const devices = value
-    .map((item) => String(item))
-    .filter((item) =>
-      ALL_DEVICES.includes(item),
-    );
+  /* Deduplicated here as well as in the widgets, so a repeated
+     bucket can never reach a browser and be miscounted as "all
+     devices selected". */
+  const devices = Array.from(
+    new Set(
+      value
+        .map((item) => String(item))
+        .filter((item) =>
+          ALL_DEVICES.includes(item),
+        ),
+    ),
+  );
 
   return devices.length > 0
     ? devices

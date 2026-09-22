@@ -249,16 +249,28 @@
 
     /* Missing or empty means no device targeting at all, which
        is every device — never nothing. */
-    if (
-      !devices ||
-      !devices.length ||
-      devices.length === 3
-    ) {
+    if (!devices || !devices.length) {
+      return true;
+    }
+
+    /* Counted after removing repeats. "All three are selected"
+       has to mean three different buckets: on raw length,
+       ["mobile","mobile","mobile"] read as no targeting at all
+       and showed a mobile-only campaign on every device. */
+    var unique = [];
+
+    for (var d = 0; d < devices.length; d += 1) {
+      if (unique.indexOf(devices[d]) === -1) {
+        unique.push(devices[d]);
+      }
+    }
+
+    if (unique.length >= 3) {
       return true;
     }
 
     return (
-      devices.indexOf(currentDevice()) !== -1
+      unique.indexOf(currentDevice()) !== -1
     );
   }
 

@@ -241,10 +241,17 @@
       /* ignore */
     }
 
-    try {
-      sources.push(document.referrer || "");
-    } catch (error) {
-      /* ignore */
+    /* The referrer is read only inside the theme editor. On a
+       live storefront it is whatever page the shopper arrived
+       from, so a single link carrying previewMode=mobile would
+       pin that shopper to mobile for the rest of their visit
+       and quietly break device targeting for them. */
+    if (inThemeEditor()) {
+      try {
+        sources.push(document.referrer || "");
+      } catch (error) {
+        /* ignore */
+      }
     }
 
     for (var i = 0; i < sources.length; i += 1) {
@@ -295,35 +302,62 @@
   }
 
   function currentDevice() {
+    /* An explicit ?previewMode= wins, because it is the only
+       signal somebody deliberately set. */
     var previewed = previewModeDevice();
 
     if (previewed) {
       return previewed;
     }
 
-    /* Inside the editor with no previewMode in sight, the
-       merchant is on the desktop preview — that is the view the
-       editor opens with and the one it drops the parameter for. */
-    if (inThemeEditor()) {
-      return "desktop";
-    }
+    /* Everything else is decided by width, the theme editor
+       included.
 
+       This used to return a hard "desktop" whenever the editor
+       was open and no previewMode had been found. The idea was
+       that the editor's preview iframe reports a desktop width
+       even in the mobile preview, so width could not be
+       trusted. It does not: switching the preview resizes the
+       iframe, and the iframe's own innerWidth follows it.
+
+       What the parameter lookup could not do was follow that
+       switch. It lives on the admin URL, which this iframe
+       cannot read cross-origin, and the referrer is captured
+       once at load and never changes when the merchant clicks
+       between desktop and mobile. So the lookup returned null
+       on every toggle, the hard "desktop" took over, and the
+       width measurement that was already correct never ran.
+       Device targeting therefore reported "desktop" for every
+       preview: a mobile-only campaign never appeared, and a
+       desktop-only one always did. */
     return widthDevice();
   }
 
   function matchesDevices(campaign) {
     var devices = campaign.devices;
 
-    if (
-      !devices ||
-      !devices.length ||
-      devices.length === 3
-    ) {
+    if (!devices || !devices.length) {
+      return true;
+    }
+
+    /* Counted after removing repeats. "All three are selected"
+       has to mean three different buckets: on raw length,
+       ["mobile","mobile","mobile"] read as no targeting at all
+       and showed a mobile-only campaign on every device. */
+    var unique = [];
+
+    for (var d = 0; d < devices.length; d += 1) {
+      if (unique.indexOf(devices[d]) === -1) {
+        unique.push(devices[d]);
+      }
+    }
+
+    if (unique.length >= 3) {
       return true;
     }
 
     var device = currentDevice();
-    var allowed = devices.indexOf(device) !== -1;
+    var allowed = unique.indexOf(device) !== -1;
 
     /* Only ever noisy inside the editor, where a merchant is
        actively checking why a popup did or didn't appear. */
@@ -334,7 +368,7 @@
           " campaign=" +
           (campaign.popupName || campaign.campaignId) +
           " allows=" +
-          devices.join(",") +
+          unique.join(",") +
           " -> " +
           (allowed ? "shown" : "hidden"),
       );
