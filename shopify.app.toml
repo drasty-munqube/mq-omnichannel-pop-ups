@@ -1,7 +1,7 @@
 # Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
 
-client_id = "fcfc9a4d097815f8d1f3d6c2ecbcaa94"
-name = "MQ: Omnichannel Pop-ups"
+client_id = "f25cd1aa63afde96ec00f8fea0310227"
+name = "MQ: Omnichannel Pop-upsV2"
 application_url = "https://mq-omnichannel-pop-ups.onrender.com"
 embedded = true
 
@@ -69,4 +69,4 @@ redirect_urls = [
 ]
 
 [build]
-automatically_update_urls_on_dev = true
+automatically_update_urls_on_dev = false

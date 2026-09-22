@@ -25,7 +25,13 @@ const shopify = shopifyApp({
 
   sessionStorage: new PrismaSessionStorage(prisma),
 
-  distribution: AppDistribution.AppStore,
+  /* Custom distribution, not an App Store listing: this app is
+     installed on specific stores from the Partners dashboard
+     rather than being publicly listed. SingleMerchant (not
+     ShopifyAdmin) is the match, because the app still installs
+     through the normal OAuth flow — ShopifyAdmin is only for
+     apps created inside a store's own admin. */
+  distribution: AppDistribution.SingleMerchant,
 
   future: {
     expiringOfflineAccessTokens: true,
