@@ -23,10 +23,12 @@
    Vanilla JS, no dependencies, safe to fail silently: nothing
    here should ever break the host page.
 
-   KNOWN LIMIT: "Specific pages" campaign targeting only
-   understands Shopify page types (home/product/collection/…),
-   so on a non-Shopify site those campaigns are skipped — only
-   "All pages" campaigns show here for now.
+   "Specific pages" targeting works here as far as it can. A
+   target saved as a pathname is compared against this page's
+   path. Targets that name a Shopify page type or handle cannot
+   exist on another website, so a campaign carrying only those
+   runs here only when the merchant pointed it at this website
+   by name. See matchesPageTargets below.
    ============================================================ */
 
 (function () {
@@ -170,6 +172,94 @@
 
     /* "All visitors", empty, or anything unrecognised. */
     return true;
+  }
+
+  /* ----------------------------------------------------------
+     PAGES
+
+     A campaign set to "Specific pages" used to be dropped
+     outright on any non-Shopify website, which took every other
+     condition down with it: its trigger, its frequency cap, its
+     cooldowns and its device rules never ran anywhere except
+     the storefront.
+
+     The targets are not all Shopify-shaped, though. A target
+     saved as path:/pricing is just a pathname and compares
+     perfectly well on any website. Only route: targets (whole
+     Shopify sections such as every product page) and page:
+     targets (a Shopify page handle) describe things that do not
+     exist here.
+
+     So: a matching path wins anywhere. If the campaign has
+     nothing but Shopify-shaped targets, the rule cannot be
+     judged on this website, and what happens next depends on
+     how deliberate the merchant was. A campaign pointed at this
+     website by name in the Websites step runs, because the
+     merchant chose this website knowing the page rule came from
+     their store. A campaign running on every website does not,
+     because nothing about it said it belonged here.
+     ---------------------------------------------------------- */
+
+  /* Normalised the same way the admin stores menu paths:
+     lowercase, no query, no hash, no trailing slash. */
+
+  function currentPath() {
+    var path;
+
+    try {
+      path = (
+        window.location.pathname || "/"
+      ).toLowerCase();
+    } catch (error) {
+      return "/";
+    }
+
+    if (path.length > 1) {
+      path = path.replace(/\/+$/, "");
+    }
+
+    return path || "/";
+  }
+
+  function matchesPageTargets(campaign) {
+    if (campaign.pageTargetMode !== "specific") {
+      return true;
+    }
+
+    var targets = campaign.pageTargets || [];
+
+    /* "Specific pages" with nothing picked is a half-finished
+       campaign. It shows nowhere on the storefront, so it shows
+       nowhere here either rather than quietly meaning
+       "everywhere" on one surface and "nowhere" on the other. */
+    if (!targets.length) {
+      return false;
+    }
+
+    var shopifyOnly = true;
+
+    for (var i = 0; i < targets.length; i += 1) {
+      var target = String(targets[i]);
+
+      if (target.indexOf("path:") !== 0) {
+        continue;
+      }
+
+      shopifyOnly = false;
+
+      if (target === "path:" + currentPath()) {
+        return true;
+      }
+    }
+
+    /* Nothing here but Shopify page types and handles. */
+    if (shopifyOnly) {
+      return (
+        campaign.siteTargetMode === "selected"
+      );
+    }
+
+    return false;
   }
 
   /* ----------------------------------------------------------
@@ -1179,9 +1269,7 @@
             continue;
           }
 
-          if (campaign.pageTargetMode === "specific") {
-            /* Shopify-specific page rules don't translate to
-               an arbitrary site — see file header. */
+          if (!matchesPageTargets(campaign)) {
             continue;
           }
 

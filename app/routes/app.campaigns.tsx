@@ -4905,18 +4905,22 @@ export default function Campaigns() {
 
                       <div key={item.title}>
 
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSelectedTrigger(
-                              item.title
-                            );
-                            clearError(
-                              "selectedTrigger"
-                            );
-                          }}
+                        {/* A real radio group. These four are
+                            mutually exclusive, so the browser
+                            should be the one enforcing that:
+                            arrow keys move between them, a
+                            screen reader announces "1 of 4",
+                            and the selected one is part of the
+                            form rather than only of component
+                            state. */}
+
+                        <label
                           style={{
+                            display: "flex",
+                            alignItems: "flex-start",
+                            gap: "11px",
                             width: "100%",
+                            boxSizing: "border-box",
                             textAlign: "left",
                             padding: "17px 20px",
                             background:
@@ -4934,28 +4938,61 @@ export default function Campaigns() {
                           }}
                         >
 
-                          <strong
-                            style={{
-                              display: "block",
-                              color: "#172033",
-                              fontSize: "14px",
+                          <input
+                            type="radio"
+                            name="mq-campaign-trigger"
+                            value={item.title}
+                            checked={
+                              selectedTrigger ===
+                              item.title
+                            }
+                            onChange={() => {
+                              setSelectedTrigger(
+                                item.title
+                              );
+                              clearError(
+                                "selectedTrigger"
+                              );
                             }}
-                          >
-                            {item.title}
-                          </strong>
+                            style={{
+                              marginTop: "2px",
+                              flexShrink: 0,
+                              accentColor: "#0B3D66",
+                              cursor: "pointer",
+                            }}
+                          />
 
                           <span
                             style={{
                               display: "block",
-                              marginTop: "4px",
-                              color: "#6B7280",
-                              fontSize: "12px",
+                              minWidth: 0,
                             }}
                           >
-                            {item.text}
+
+                            <strong
+                              style={{
+                                display: "block",
+                                color: "#172033",
+                                fontSize: "14px",
+                              }}
+                            >
+                              {item.title}
+                            </strong>
+
+                            <span
+                              style={{
+                                display: "block",
+                                marginTop: "4px",
+                                color: "#6B7280",
+                                fontSize: "12px",
+                              }}
+                            >
+                              {item.text}
+                            </span>
+
                           </span>
 
-                        </button>
+                        </label>
 
                         {/* DELAY CONTROL */}
 

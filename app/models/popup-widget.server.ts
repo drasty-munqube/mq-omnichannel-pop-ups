@@ -20,6 +20,12 @@ export type EligibleCampaign = {
   triggerScrollPercent: number;
   pageTargetMode: string;
   pageTargets: unknown;
+  /* Sent so a widget can tell "this campaign was pointed at this
+     website by hand" from "this campaign runs on everything".
+     Off Shopify that is the difference between a page rule the
+     merchant clearly meant to apply here and one that simply
+     cannot be evaluated. */
+  siteTargetMode: string;
   frequencyMode: string;
   frequencyLimit: number;
   reshowCollectedDays: number;
@@ -165,6 +171,7 @@ export async function getEligibleCampaigns(
         )
           ? campaign.pageTargets
           : [],
+        siteTargetMode: campaign.siteTargetMode,
         frequencyMode: campaign.frequencyMode,
         frequencyLimit: campaign.frequencyLimit,
         reshowCollectedDays:

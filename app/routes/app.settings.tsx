@@ -69,12 +69,15 @@ export default function Settings() {
             window, even on a desktop machine.
           </s-list-item>
           <s-list-item>
-            On non-Shopify sites, only campaigns
-            targeting All pages run. Campaigns
-            targeting specific Shopify page types,
-            such as product or collection, are
-            skipped because those page types do
-            not exist there.
+            Page rules work on other websites as
+            far as they can. A page saved as a path
+            is matched against the page someone is
+            on. A Shopify page type, such as every
+            product page, does not exist on another
+            website, so a campaign built only from
+            those runs there only if you picked
+            that website by name on the Websites
+            step.
           </s-list-item>
           <s-list-item>
             Triggers still apply. If a campaign
