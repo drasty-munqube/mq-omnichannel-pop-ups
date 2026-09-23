@@ -1241,7 +1241,7 @@ export default function Campaigns() {
     return options;
   })();
 
-  const totalSteps = 5;
+  const totalSteps = 6;
 
   /* =========================================================
      CAMPAIGN DATA
@@ -1897,19 +1897,22 @@ export default function Campaigns() {
       }
     }
 
-    if (step === 2 && !selectedAudience) {
+    if (step === 3 && !selectedAudience) {
       stepErrors.selectedAudience =
         "Please choose an audience for this campaign.";
     }
 
-    /* Popup lives in step 1 (Build) alongside the details. */
-    if (step === 1 && !selectedPopup) {
+    /* Choosing the popup is its own step now, so its error
+       belongs to that step rather than to Build. Getting this
+       wrong would show the error on a screen that has no popup
+       picker on it. */
+    if (step === 2 && !selectedPopup) {
       stepErrors.selectedPopup =
         "Please select a live popup for this campaign.";
     }
 
-    /* Trigger lives in step 2 (Target) alongside the audience. */
-    if (step === 2) {
+    /* Trigger lives in step 3 (Target) alongside the audience. */
+    if (step === 3) {
       if (!selectedTrigger) {
         stepErrors.selectedTrigger =
           "Please choose when this popup should appear.";
@@ -1957,7 +1960,7 @@ export default function Campaigns() {
     }
 
     if (
-      step === 3 &&
+      step === 4 &&
       siteTargetMode === "selected" &&
       siteTargets.length === 0
     ) {
@@ -1965,7 +1968,7 @@ export default function Campaigns() {
         "Choose a website, or switch to all websites.";
     }
 
-    if (step === 4 && !selectedReward) {
+    if (step === 5 && !selectedReward) {
       stepErrors.selectedReward =
         "Please choose a reward option.";
     }
@@ -3837,6 +3840,7 @@ export default function Campaigns() {
 
                 {[
                   "Build",
+                  "Popup",
                   "Target",
                   "Websites",
                   "Reward",
@@ -4213,10 +4217,10 @@ export default function Campaigns() {
 
 
               {/* =================================================
-                  STEP 2 — audience
+                  STEP 3 — audience
               ================================================= */}
 
-              {wizardStep === 2 && (
+              {wizardStep === 3 && (
 
                 <div
                   style={{
@@ -4232,7 +4236,7 @@ export default function Campaigns() {
                       fontWeight: 700,
                     }}
                   >
-                    STEP 2 · AUDIENCE
+                    STEP 3 · AUDIENCE
                   </div>
 
                   <h2
@@ -4348,20 +4352,15 @@ export default function Campaigns() {
 
 
               {/* =================================================
-                  STEP 1 (continued) — popup
+                  STEP 2 — popup
               ================================================= */}
 
-              {wizardStep === 1 && (
+              {wizardStep === 2 && (
 
                 <div
                   style={{
                     maxWidth: "1040px",
-                    /* Second half of the merged Build step, so it
-                       needs a rule above it to read as its own
-                       section rather than running on from Details. */
-                    margin: "40px auto 0",
-                    paddingTop: "32px",
-                    borderTop: "1px solid #E7EBEF",
+                    margin: "0 auto",
                   }}
                 >
 
@@ -4372,7 +4371,7 @@ export default function Campaigns() {
                       fontWeight: 700,
                     }}
                   >
-                    STEP 1 · POPUP
+                    STEP 2 · POPUP
                   </div>
 
                   <h2
@@ -4824,16 +4823,18 @@ export default function Campaigns() {
 
 
               {/* =================================================
-                  STEP 2 (continued) — trigger
+                  STEP 3 (continued) — trigger
               ================================================= */}
 
-              {wizardStep === 2 && (
+              {wizardStep === 3 && (
 
                 <div
                   style={{
                     maxWidth: "1040px",
-                    /* Second half of the merged Target step — see
-                       the matching rule in the Build step. */
+                    /* Trigger shares the Target step with Audience,
+                       so it needs a rule above it to read as its own
+                       section rather than running on from the
+                       audience choice. */
                     margin: "40px auto 0",
                     paddingTop: "32px",
                     borderTop: "1px solid #E7EBEF",
@@ -4847,7 +4848,7 @@ export default function Campaigns() {
                       fontWeight: 700,
                     }}
                   >
-                    STEP 2 · TRIGGER
+                    STEP 3 · TRIGGER
                   </div>
 
                   <h2
@@ -5975,16 +5976,16 @@ export default function Campaigns() {
 
 
               {/* =================================================
-                  STEP 3 — websites
+                  STEP 4 — websites
 
-                  Page targeting in step 4 is about where inside
+                  Page targeting in step 3 is about where inside
                   a storefront a popup shows. This step is about
                   which website it shows on at all, which starts
                   to matter the moment the embed snippet is on
                   more than one site.
               ================================================= */}
 
-              {wizardStep === 3 && (
+              {wizardStep === 4 && (
 
                 <div
                   style={{
@@ -6000,7 +6001,7 @@ export default function Campaigns() {
                       fontWeight: 700,
                     }}
                   >
-                    STEP 3 · WEBSITES
+                    STEP 4 · WEBSITES
                   </div>
 
                   <h2
@@ -6356,10 +6357,10 @@ export default function Campaigns() {
 
 
               {/* =================================================
-                  STEP 4 — reward
+                  STEP 5 — reward
               ================================================= */}
 
-              {wizardStep === 4 && (
+              {wizardStep === 5 && (
 
                 <div
                   style={{
@@ -6375,7 +6376,7 @@ export default function Campaigns() {
                       fontWeight: 700,
                     }}
                   >
-                    STEP 4 · REWARD
+                    STEP 5 · REWARD
                   </div>
 
                   <h2
@@ -6725,10 +6726,10 @@ export default function Campaigns() {
 
 
               {/* =================================================
-                  STEP 5 — review
+                  STEP 6 — review
               ================================================= */}
 
-              {wizardStep === 5 && (
+              {wizardStep === 6 && (
 
                 <div
                   style={{
@@ -6744,7 +6745,7 @@ export default function Campaigns() {
                       fontWeight: 700,
                     }}
                   >
-                    STEP 5 · REVIEW
+                    STEP 6 · REVIEW
                   </div>
 
                   <h2
