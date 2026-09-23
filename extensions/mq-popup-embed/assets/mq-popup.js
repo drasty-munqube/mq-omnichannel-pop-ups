@@ -819,6 +819,12 @@
       onMouseOut,
     );
     window.addEventListener("scroll", onScroll);
+
+    /* Handed back so a widget removed on a resize can stop
+       listening. Without it the handlers would outlive the
+       popup and fire against a campaign that is no longer on
+       screen. */
+    return cleanup;
   }
 
   /* ------------------------------------------------------------
@@ -861,6 +867,8 @@
         onDone();
       });
   }
+
+  var countedCampaigns = [];
 
   function buildWidget(campaign) {
     var settings = popupSettingsFor(campaign.steps);
@@ -1205,7 +1213,9 @@
 
     /* ---------------- TRIGGER ---------------- */
 
-    var counted = false;
+    var delayTimer = null;
+    var scrollHandler = null;
+    var cancelExitIntent = null;
 
     function showTeaser() {
       /* The view is counted here, when the popup actually
@@ -1215,8 +1225,14 @@
          their frequency cap. Guarded so a re-entrant trigger
          cannot double count. */
 
-      if (!counted) {
-        counted = true;
+      if (
+        countedCampaigns.indexOf(
+          campaign.campaignId,
+        ) === -1
+      ) {
+        countedCampaigns.push(
+          campaign.campaignId,
+        );
         markViewed(campaign.campaignId);
         sendEvent(campaign, "view");
       }
@@ -1224,16 +1240,50 @@
       document.body.appendChild(pill);
     }
 
+    /* Everything this widget attached to the page, undone. The
+       timers and listeners matter as much as the elements: a
+       pending delay or a live scroll handler would otherwise
+       put the popup back after the campaign stopped being
+       allowed on this screen size. */
+
+    function destroy() {
+      if (delayTimer) {
+        window.clearTimeout(delayTimer);
+        delayTimer = null;
+      }
+
+      if (scrollHandler) {
+        window.removeEventListener(
+          "scroll",
+          scrollHandler,
+        );
+        scrollHandler = null;
+      }
+
+      if (cancelExitIntent) {
+        cancelExitIntent();
+        cancelExitIntent = null;
+      }
+
+      pill.remove();
+
+      if (overlay) {
+        overlay.remove();
+        overlay = null;
+      }
+    }
+
     if (campaign.trigger === "Exit intent") {
-      onExitIntent(showTeaser);
+      cancelExitIntent = onExitIntent(showTeaser);
     } else if (campaign.trigger === "After delay") {
-      window.setTimeout(
+      delayTimer = window.setTimeout(
         showTeaser,
         campaign.triggerDelaySeconds * 1000,
       );
     } else if (campaign.trigger === "Scroll depth") {
       var handled = false;
-      window.addEventListener("scroll", function () {
+
+      scrollHandler = function () {
         if (handled) {
           return;
         }
@@ -1246,10 +1296,153 @@
           handled = true;
           showTeaser();
         }
-      });
+      };
+
+      window.addEventListener(
+        "scroll",
+        scrollHandler,
+      );
     } else {
       showTeaser();
     }
+
+    return {
+      campaign: campaign,
+      isOpen: function () {
+        return Boolean(overlay);
+      },
+      destroy: destroy,
+    };
+  }
+
+  /* ------------------------------------------------------------
+     SELECTION, AND KEEPING IT TRUE
+
+     Device targeting used to be decided once, when the page
+     loaded, and never looked at again. A shopper who rotated a
+     tablet, or a merchant who dragged the theme editor between
+     the desktop and mobile previews, kept whatever had been
+     decided for the width they started at: a desktop-only
+     campaign stayed on screen at phone width, and a
+     mobile-only one never appeared however narrow the view
+     became, until the page was reloaded.
+
+     So the width is watched, and when it crosses into another
+     bucket the choice is made again from the campaigns already
+     fetched. Nothing is re-requested; only the decision is
+     redone.
+     ------------------------------------------------------------ */
+
+  var loadedCampaigns = [];
+  var activeWidget = null;
+  var lastDevice = null;
+
+  function pickCampaign() {
+    for (
+      var i = 0;
+      i < loadedCampaigns.length;
+      i += 1
+    ) {
+      var campaign = loadedCampaigns[i];
+
+      if (!matchesPageTargets(campaign)) {
+        continue;
+      }
+
+      if (!matchesDevices(campaign)) {
+        continue;
+      }
+
+      if (!matchesCampaignAudience(campaign)) {
+        continue;
+      }
+
+      if (!withinFrequencyCap(campaign)) {
+        continue;
+      }
+
+      if (collectedBlocks(campaign)) {
+        continue;
+      }
+
+      if (dismissedBlocks(campaign)) {
+        continue;
+      }
+
+      var settings = popupSettingsFor(
+        campaign.steps,
+      );
+
+      if (!matchesAudience(settings)) {
+        continue;
+      }
+
+      return campaign;
+    }
+
+    return null;
+  }
+
+  function applySelection() {
+    if (activeWidget) {
+      /* A shopper part-way through the form is never
+         interrupted, whatever the window is doing. Their
+         submission matters more than a targeting rule, and
+         taking the popup away mid-typing would lose what they
+         had entered. */
+      if (activeWidget.isOpen()) {
+        return;
+      }
+
+      if (
+        matchesDevices(activeWidget.campaign)
+      ) {
+        return;
+      }
+
+      activeWidget.destroy();
+      activeWidget = null;
+    }
+
+    var campaign = pickCampaign();
+
+    if (campaign) {
+      activeWidget = buildWidget(campaign);
+    }
+  }
+
+  function watchViewport() {
+    var pending = null;
+
+    function onChange() {
+      /* Debounced: dragging a window edge fires this dozens of
+         times a second, and rebuilding on each one would flash
+         the popup in and out. */
+      if (pending) {
+        window.clearTimeout(pending);
+      }
+
+      pending = window.setTimeout(function () {
+        pending = null;
+
+        var device = currentDevice();
+
+        /* Only a move into a different bucket matters. Every
+           other resize leaves the answer unchanged. */
+        if (device === lastDevice) {
+          return;
+        }
+
+        lastDevice = device;
+        applySelection();
+      }, 200);
+    }
+
+    window.addEventListener("resize", onChange);
+    window.addEventListener(
+      "orientationchange",
+      onChange,
+    );
   }
 
   /* ------------------------------------------------------------
@@ -1263,46 +1456,11 @@
       return response.json();
     })
     .then(function (data) {
-      var campaigns = data.campaigns || [];
+      loadedCampaigns = data.campaigns || [];
+      lastDevice = currentDevice();
 
-      for (var i = 0; i < campaigns.length; i += 1) {
-        var campaign = campaigns[i];
-
-        if (!matchesPageTargets(campaign)) {
-          continue;
-        }
-
-        if (!matchesDevices(campaign)) {
-          continue;
-        }
-
-        if (!matchesCampaignAudience(campaign)) {
-          continue;
-        }
-
-        if (!withinFrequencyCap(campaign)) {
-          continue;
-        }
-
-        if (collectedBlocks(campaign)) {
-          continue;
-        }
-
-        if (dismissedBlocks(campaign)) {
-          continue;
-        }
-
-        var settings = popupSettingsFor(
-          campaign.steps,
-        );
-
-        if (!matchesAudience(settings)) {
-          continue;
-        }
-
-        buildWidget(campaign);
-        break;
-      }
+      applySelection();
+      watchViewport();
     })
     .catch(function () {
       /* storefront should never break if this fails */

@@ -799,6 +799,12 @@
       onMouseOut,
     );
     window.addEventListener("scroll", onScroll);
+
+    /* Handed back so a widget removed on a resize can stop
+       listening. Without it the handlers would outlive the
+       popup and fire against a campaign that is no longer on
+       screen. */
+    return cleanup;
   }
 
   /* ------------------------------------------------------------
@@ -839,6 +845,8 @@
   /* ------------------------------------------------------------
      WIDGET
   ------------------------------------------------------------ */
+
+  var countedCampaigns = [];
 
   function buildWidget(campaign, isPreview) {
     var settings = popupSettingsFor(campaign.steps);
@@ -1128,7 +1136,9 @@
 
     /* ---------------- TRIGGER ---------------- */
 
-    var counted = false;
+    var delayTimer = null;
+    var scrollHandler = null;
+    var cancelExitIntent = null;
 
     function showTeaser() {
       /* The view is counted here, when the popup actually
@@ -1142,8 +1152,15 @@
          merchant testing their own popup does not burn the cap
          they are trying to test. */
 
-      if (!counted && !isPreview) {
-        counted = true;
+      if (
+        !isPreview &&
+        countedCampaigns.indexOf(
+          campaign.campaignId,
+        ) === -1
+      ) {
+        countedCampaigns.push(
+          campaign.campaignId,
+        );
         markViewed(campaign.campaignId);
         sendEvent(campaign, "view");
       }
@@ -1151,16 +1168,50 @@
       document.body.appendChild(pill);
     }
 
+    /* Everything this widget attached to the page, undone. The
+       timers and listeners matter as much as the elements: a
+       pending delay or a live scroll handler would otherwise
+       put the popup back after the campaign stopped being
+       allowed on this screen size. */
+
+    function destroy() {
+      if (delayTimer) {
+        window.clearTimeout(delayTimer);
+        delayTimer = null;
+      }
+
+      if (scrollHandler) {
+        window.removeEventListener(
+          "scroll",
+          scrollHandler,
+        );
+        scrollHandler = null;
+      }
+
+      if (cancelExitIntent) {
+        cancelExitIntent();
+        cancelExitIntent = null;
+      }
+
+      pill.remove();
+
+      if (overlay) {
+        overlay.remove();
+        overlay = null;
+      }
+    }
+
     if (campaign.trigger === "Exit intent") {
-      onExitIntent(showTeaser);
+      cancelExitIntent = onExitIntent(showTeaser);
     } else if (campaign.trigger === "After delay") {
-      window.setTimeout(
+      delayTimer = window.setTimeout(
         showTeaser,
         campaign.triggerDelaySeconds * 1000,
       );
     } else if (campaign.trigger === "Scroll depth") {
       var handled = false;
-      window.addEventListener("scroll", function () {
+
+      scrollHandler = function () {
         if (handled) {
           return;
         }
@@ -1173,10 +1224,23 @@
           handled = true;
           showTeaser();
         }
-      });
+      };
+
+      window.addEventListener(
+        "scroll",
+        scrollHandler,
+      );
     } else {
       showTeaser();
     }
+
+    return {
+      campaign: campaign,
+      isOpen: function () {
+        return Boolean(overlay);
+      },
+      destroy: destroy,
+    };
   }
 
   /* ------------------------------------------------------------
@@ -1212,6 +1276,147 @@
   function pinnedCampaignId() {
     return thisScript.getAttribute(
       "data-campaign",
+    );
+  }
+
+  /* ------------------------------------------------------------
+     SELECTION, AND KEEPING IT TRUE
+
+     Device targeting used to be decided once, at page load, and
+     never looked at again. Someone who resized their window,
+     rotated a tablet, or opened dev tools wide enough to cross
+     768px kept whatever had been decided for the width they
+     happened to load at: a desktop-only campaign stayed on
+     screen down at phone width, and a mobile-only one never
+     appeared however narrow the window got until the page was
+     reloaded.
+
+     So the width is watched, and when it crosses into another
+     bucket the choice is made again from the campaigns already
+     fetched. Nothing is re-requested; only the decision is
+     redone.
+     ------------------------------------------------------------ */
+
+  var loadedCampaigns = [];
+  var activeWidget = null;
+  var lastDevice = null;
+
+  function pickCampaign() {
+    var pinnedId = pinnedCampaignId();
+
+    for (
+      var i = 0;
+      i < loadedCampaigns.length;
+      i += 1
+    ) {
+      var campaign = loadedCampaigns[i];
+
+      /* A pinned snippet narrows this website down to one
+         campaign, then every normal rule below still runs. */
+      if (
+        pinnedId &&
+        campaign.campaignId !== pinnedId
+      ) {
+        continue;
+      }
+
+      if (!matchesPageTargets(campaign)) {
+        continue;
+      }
+
+      if (!matchesDevices(campaign)) {
+        continue;
+      }
+
+      if (!matchesCampaignAudience(campaign)) {
+        continue;
+      }
+
+      if (!withinFrequencyCap(campaign)) {
+        continue;
+      }
+
+      if (collectedBlocks(campaign)) {
+        continue;
+      }
+
+      if (dismissedBlocks(campaign)) {
+        continue;
+      }
+
+      var settings = popupSettingsFor(
+        campaign.steps,
+      );
+
+      if (!matchesAudience(settings)) {
+        continue;
+      }
+
+      return campaign;
+    }
+
+    return null;
+  }
+
+  function applySelection() {
+    if (activeWidget) {
+      /* Somebody part-way through the form is never
+         interrupted, whatever the window is doing. Their
+         submission matters more than a targeting rule, and
+         yanking the popup mid-typing would lose what they had
+         entered. */
+      if (activeWidget.isOpen()) {
+        return;
+      }
+
+      if (
+        matchesDevices(activeWidget.campaign)
+      ) {
+        return;
+      }
+
+      activeWidget.destroy();
+      activeWidget = null;
+    }
+
+    var campaign = pickCampaign();
+
+    if (campaign) {
+      activeWidget = buildWidget(campaign);
+    }
+  }
+
+  function watchViewport() {
+    var pending = null;
+
+    function onChange() {
+      /* Debounced: dragging a window edge fires this dozens of
+         times a second, and rebuilding on each one would flash
+         the popup in and out. */
+      if (pending) {
+        window.clearTimeout(pending);
+      }
+
+      pending = window.setTimeout(function () {
+        pending = null;
+
+        var device = currentDevice();
+
+        /* Only a move into a different bucket matters. Every
+           other resize leaves the answer unchanged. */
+        if (device === lastDevice) {
+          return;
+        }
+
+        lastDevice = device;
+        applySelection();
+      }, 200);
+    }
+
+    window.addEventListener("resize", onChange);
+    window.addEventListener(
+      "orientationchange",
+      onChange,
     );
   }
 
@@ -1255,53 +1460,11 @@
           return;
         }
 
-        var pinnedId = pinnedCampaignId();
+        loadedCampaigns = campaigns;
+        lastDevice = currentDevice();
 
-        for (var i = 0; i < campaigns.length; i += 1) {
-          var campaign = campaigns[i];
-
-          /* A pinned snippet narrows this website down to one
-             campaign, then every normal rule below still runs. */
-          if (
-            pinnedId &&
-            campaign.campaignId !== pinnedId
-          ) {
-            continue;
-          }
-
-          if (!matchesPageTargets(campaign)) {
-            continue;
-          }
-
-          if (!matchesDevices(campaign)) {
-            continue;
-          }
-
-          if (!matchesCampaignAudience(campaign)) {
-            continue;
-          }
-
-          if (!withinFrequencyCap(campaign)) {
-            continue;
-          }
-
-          if (collectedBlocks(campaign)) {
-            continue;
-          }
-
-          if (dismissedBlocks(campaign)) {
-            continue;
-          }
-
-          var settings = popupSettingsFor(campaign.steps);
-
-          if (!matchesAudience(settings)) {
-            continue;
-          }
-
-          buildWidget(campaign);
-          break;
-        }
+        applySelection();
+        watchViewport();
       })
       .catch(function () {
         /* the host page should never see this fail */
