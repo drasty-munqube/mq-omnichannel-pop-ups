@@ -1,5 +1,7 @@
 import nodemailer from "nodemailer";
 import type { Transporter } from "nodemailer";
+import dns from "node:dns";
+import net from "node:net";
 
 import db from "../db.server";
 import { couponEmail } from "./coupon-email";
@@ -44,7 +46,7 @@ const MAX_ATTEMPTS = 5;
 let transporter: Transporter | null = null;
 let transportError: string | null = null;
 
-function getTransport() {
+async function getTransport() {
   if (transporter || transportError) {
     return transporter;
   }
@@ -59,13 +61,34 @@ function getTransport() {
     return null;
   }
 
+  // Some hosts (Render included) advertise an IPv6 interface that isn't
+  // actually routable, and nodemailer's DNS resolver picks a random address
+  // out of the combined IPv4+IPv6 pool - so it intermittently tries IPv6 and
+  // gets ENETUNREACH. Resolving the A record ourselves and connecting by IP
+  // sidesteps that; `tls.servername` keeps certificate validation checking
+  // against the real hostname instead of the raw IP.
+  let connectHost = host;
+  let servername: string | undefined;
+  if (!net.isIP(host)) {
+    try {
+      const addresses = await dns.promises.resolve4(host);
+      if (addresses.length > 0) {
+        connectHost = addresses[Math.floor(Math.random() * addresses.length)];
+        servername = host;
+      }
+    } catch {
+      // Fall back to the hostname as-is; nodemailer will resolve it itself.
+    }
+  }
+
   transporter = nodemailer.createTransport({
-    host,
+    host: connectHost,
     port: Number(process.env.EMAIL_PORT) || 465,
     secure: process.env.EMAIL_SECURE !== "false",
     auth: { user, pass },
     pool: true,
     maxConnections: 3,
+    ...(servername ? { tls: { servername } } : {}),
   });
 
   return transporter;
@@ -147,7 +170,7 @@ async function sendOne(job: {
   code: string;
   attempts: number;
 }) {
-  const transport = getTransport();
+  const transport = await getTransport();
 
   if (!transport) {
     throw new Error(
