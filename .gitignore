@@ -15,9 +15,18 @@ database.sqlite
 
 .env
 .env.*
+# The example carries no values and has to stay committed, so it is
+# pulled back out of the rule above. Order matters: the negation is
+# only honoured after the pattern that ignored it.
+!.env.example
 
-
-
+# Other shapes a secret arrives in
+*.pem
+*.key
+*.p12
+*.pfx
+service-account*.json
+secrets/
 
 
 /extensions/*/dist

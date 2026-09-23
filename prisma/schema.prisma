@@ -147,3 +147,47 @@ model PopupEvent {
   @@index([shop, createdAt])
   @@index([shop, campaignId, type])
 }
+
+// One row per coupon we owe somebody. Created when a popup is
+// submitted, then worked off separately, because a shopper should
+// never wait on an SMTP handshake to see their success screen.
+//
+// Unlike PopupEvent this is not append-only: a row is updated as it
+// is attempted, succeeds or gives up, which is what makes a retry
+// possible and lets the merchant see who actually got their code.
+model DiscountDelivery {
+  id          String    @id @default(cuid())
+  shop        String
+  contactId   String
+  campaignId  String
+
+  // "email" for now. "whatsapp" slots in here without a migration.
+  channel     String
+
+  // The address or number as it was at the time. Kept separate from
+  // Contact so editing or erasing a contact cannot rewrite history.
+  destination String
+
+  // Resolved from the campaign on the server. The browser never
+  // sends a code, so it cannot ask for one it was not offered.
+  code        String
+
+  // "pending" | "sent" | "failed"
+  status      String    @default("pending")
+  attempts    Int       @default(0)
+  error       String?
+
+  // The provider's message id, so a bounce or delivery webhook can
+  // be matched back to this row.
+  providerId  String?
+
+  sentAt      DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // A shopper who submits twice, or a retried request, must not be
+  // sent two coupons.
+  @@unique([contactId, channel])
+  @@index([shop, status])
+  @@index([shop, createdAt])
+}

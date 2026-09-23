@@ -1,4 +1,8 @@
 import db from "../db.server";
+import {
+  kickDeliveries,
+  queueCouponDelivery,
+} from "./delivery.server";
 
 /* ============================================================
    SHARED WIDGET DATA ACCESS
@@ -216,7 +220,7 @@ export async function saveSubmission(
     ) ||
     null;
 
-  await db.contact.create({
+  const contact = await db.contact.create({
     data: {
       shop,
       popupId: body.popupId || null,
@@ -242,6 +246,25 @@ export async function saveSubmission(
     device: body.device,
     pageUrl: body.pageUrl,
   });
+
+  /* The shopper was promised a code, so the promise is written
+     down before this call returns. Sending happens after, and
+     separately, because the popup must not wait on a mail server
+     to show its success step.
+
+     The code itself is looked up from the campaign inside
+     queueCouponDelivery. It is never read from the request. */
+
+  const delivery = await queueCouponDelivery({
+    shop,
+    contactId: contact.id,
+    campaignId: body.campaignId,
+    email,
+  });
+
+  if (delivery) {
+    kickDeliveries(shop);
+  }
 }
 
 /* ============================================================
