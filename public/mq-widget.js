@@ -634,6 +634,8 @@
           placeholder:
             block.placeholder || block.text || "",
           "data-mq-field": block.id,
+          "data-mq-field-type":
+            block.fieldType || "text",
         },
       );
       if (block.fieldRequired) {
@@ -811,12 +813,23 @@
      SUBMIT
   ------------------------------------------------------------ */
 
-  function submitContact(campaign, fieldValues, onDone) {
-    var email = null;
-    for (var key in fieldValues) {
-      if (/@/.test(fieldValues[key] || "")) {
-        email = fieldValues[key];
-        break;
+  function submitContact(
+    campaign,
+    fieldValues,
+    emailValue,
+    phoneValue,
+    onDone,
+  ) {
+    /* The field marked as an email wins. Sniffing for an @ is only
+       the fallback, for popups built before field types existed. */
+    var email = emailValue;
+
+    if (!email) {
+      for (var key in fieldValues) {
+        if (/@/.test(fieldValues[key] || "")) {
+          email = fieldValues[key];
+          break;
+        }
       }
     }
 
@@ -829,6 +842,7 @@
         popupName: campaign.popupName,
         campaignId: campaign.campaignId,
         email: email,
+        phone: phoneValue || null,
         fields: fieldValues,
         device: currentDevice(),
         pageUrl: window.location.href,
@@ -1066,12 +1080,29 @@
     function handleOfferSubmit(body) {
       var inputs = body.querySelectorAll("[data-mq-field]");
       var values = {};
+      var emailValue = null;
+      var phoneValue = null;
+
       for (var i = 0; i < inputs.length; i += 1) {
-        values[inputs[i].getAttribute("data-mq-field")] =
-          inputs[i].value;
+        var input = inputs[i];
+        var type = input.getAttribute(
+          "data-mq-field-type",
+        );
+
+        values[
+          input.getAttribute("data-mq-field")
+        ] = input.value;
+
+        if (type === "email") {
+          emailValue = input.value;
+        }
+
+        if (type === "phone") {
+          phoneValue = input.value;
+        }
       }
 
-      submitContact(campaign, values, function () {
+      submitContact(campaign, values, emailValue, phoneValue, function () {
         /* They gave us their details, so the "if collected"
            cooldown starts now. */
         submitted = true;

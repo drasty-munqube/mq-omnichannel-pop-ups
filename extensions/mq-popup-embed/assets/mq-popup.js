@@ -127,7 +127,37 @@
     }
   })();
 
+  /* ------------------------------------------------------------
+     THE EDITOR IS NOT A SHOPPER
+
+     Everything below remembers something about the person
+     looking at the page: that they have been here, how many
+     times they have seen a campaign, that they closed it, that
+     they submitted it. All of it is read back later to decide
+     whether the popup may appear again.
+
+     A merchant designing in the theme editor is looking at the
+     same origin as the storefront, so anything written there
+     lands in the same browser storage the real preview reads.
+     Closing the popup once while styling it therefore wrote a
+     real dismissal, and a campaign set to wait nine days before
+     showing again then stayed hidden on the storefront for nine
+     days. The merchant had done nothing wrong and had no way to
+     see why: the editor kept showing the popup, because the
+     editor is where they kept opening it from.
+
+     So the editor reads this state but never writes it.
+     Frequency caps and cooldowns still demonstrably apply
+     there, because a real visit can still have written them;
+     what can no longer happen is a merchant quietly spending
+     their own campaign's budget while looking at it.
+     ------------------------------------------------------------ */
+
   function markVisited() {
+    if (inThemeEditor()) {
+      return;
+    }
+
     try {
       window.localStorage.setItem("mq_seen", "1");
     } catch (error) {
@@ -386,6 +416,10 @@
   }
 
   function markViewed(campaignId) {
+    if (inThemeEditor()) {
+      return;
+    }
+
     safeSet(
       "mq_views_" + campaignId,
       String(viewCount(campaignId) + 1),
@@ -443,6 +477,10 @@
   }
 
   function markCollected(campaignId) {
+    if (inThemeEditor()) {
+      return;
+    }
+
     safeSet(
       "mq_collected_" + campaignId,
       String(Date.now()),
@@ -457,6 +495,10 @@
   }
 
   function markDismissed(campaignId) {
+    if (inThemeEditor()) {
+      return;
+    }
+
     safeSet(
       "mq_dismissed_" + campaignId,
       String(Date.now()),
@@ -835,6 +877,7 @@
     campaign,
     fieldValues,
     emailValue,
+    phoneValue,
     onDone,
   ) {
     var email = emailValue;
@@ -855,6 +898,7 @@
         popupName: campaign.popupName,
         campaignId: campaign.campaignId,
         email: email,
+        phone: phoneValue || null,
         fields: fieldValues,
         device: currentDevice(),
         pageUrl: window.location.href,
@@ -1113,6 +1157,7 @@
       );
       var values = {};
       var emailValue = null;
+      var phoneValue = null;
 
       for (var i = 0; i < inputs.length; i += 1) {
         var input = inputs[i];
@@ -1131,12 +1176,16 @@
         );
         values[fieldKey] = input.value;
 
-        if (
-          input.getAttribute(
-            "data-mq-field-type",
-          ) === "email"
-        ) {
+        var fieldType = input.getAttribute(
+          "data-mq-field-type",
+        );
+
+        if (fieldType === "email") {
           emailValue = input.value;
+        }
+
+        if (fieldType === "phone") {
+          phoneValue = input.value;
         }
       }
 
@@ -1144,6 +1193,7 @@
         campaign,
         values,
         emailValue,
+        phoneValue,
         function () {
           /* They gave us their details, so the "if collected"
              cooldown starts now. */
