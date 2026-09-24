@@ -5,6 +5,7 @@ import { useLoaderData } from "react-router";
 
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
+import { kickDeliveries } from "../models/delivery.server";
 
 /* ============================================================
    CSV EXPORT
@@ -131,6 +132,12 @@ export async function loader({
 }: LoaderFunctionArgs) {
   const { session } =
     await authenticate.admin(request);
+
+  /* Retry any coupon emails still pending, in the background.
+     Opening Contacts is the natural moment a merchant checks on
+     them, and it means a row stuck after a failed send does not
+     have to wait for the next popup submission. */
+  kickDeliveries(session.shop);
 
   const url = new URL(request.url);
 

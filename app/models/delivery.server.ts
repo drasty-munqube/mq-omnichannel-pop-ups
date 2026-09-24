@@ -32,52 +32,178 @@ export { couponEmail } from "./coupon-email";
 const MAX_ATTEMPTS = 5;
 
 /* ------------------------------------------------------------
-   TRANSPORT
+   PROVIDERS
 
-   Built once and reused. A transport per message opens a new
-   connection every time, which is slower and is what gets a
-   sender rate limited.
+   Render's free web services block outbound SMTP (ports 25, 465
+   and 587), so Gmail SMTP times out there no matter how it is
+   configured. Production sends over HTTPS instead, which no host
+   blocks. The first provider that is configured wins:
 
-   Missing configuration is not a crash. The app has to keep
-   serving popups on a shop that has not set up email at all;
-   deliveries simply stay pending and say why.
+     BREVO_API_KEY   Brevo transactional API (free, 300/day)
+     RESEND_API_KEY  Resend API (needs a verified domain)
+     EMAIL_HOST ...  plain SMTP, fine locally or on a paid host
+
+   MAIL_FROM is the sender for all three, as
+   "Store name <you@example.com>". With Brevo that address must
+   be a verified sender in the Brevo dashboard.
    ------------------------------------------------------------ */
 
+type Provider = "brevo" | "resend" | "smtp";
+
+function activeProvider(): Provider | null {
+  if (process.env.BREVO_API_KEY) return "brevo";
+  if (process.env.RESEND_API_KEY) return "resend";
+  if (
+    process.env.EMAIL_HOST &&
+    process.env.EMAIL_USER &&
+    process.env.EMAIL_PASS
+  ) {
+    return "smtp";
+  }
+  return null;
+}
+
+export function emailConfigured() {
+  return activeProvider() !== null;
+}
+
+function sender() {
+  const raw = (
+    process.env.MAIL_FROM ||
+    process.env.EMAIL_USER ||
+    ""
+  ).trim();
+  const match = raw.match(/^\s*"?([^"<]*?)"?\s*<([^>]+)>\s*$/);
+
+  if (match) {
+    return {
+      raw,
+      name: match[1].trim() || undefined,
+      email: match[2].trim(),
+    };
+  }
+
+  return { raw, name: undefined, email: raw };
+}
+
+const HTTP_TIMEOUT_MS = 15_000;
+
+async function postJson(
+  url: string,
+  headers: Record<string, string>,
+  body: unknown,
+) {
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      ...headers,
+    },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(HTTP_TIMEOUT_MS),
+  });
+
+  const text = await response.text();
+
+  if (!response.ok) {
+    throw new Error(
+      `HTTP ${response.status}: ${text.slice(0, 300)}`,
+    );
+  }
+
+  try {
+    return JSON.parse(text) as Record<string, unknown>;
+  } catch {
+    return {};
+  }
+}
+
+type Message = {
+  to: string;
+  subject: string;
+  text: string;
+  html: string;
+};
+
+async function sendViaBrevo(message: Message) {
+  const from = sender();
+
+  if (!from.email) {
+    throw new Error("MAIL_FROM is not set.");
+  }
+
+  const result = await postJson(
+    "https://api.brevo.com/v3/smtp/email",
+    { "api-key": process.env.BREVO_API_KEY as string },
+    {
+      sender: from.name
+        ? { name: from.name, email: from.email }
+        : { email: from.email },
+      to: [{ email: message.to }],
+      subject: message.subject,
+      htmlContent: message.html,
+      textContent: message.text,
+    },
+  );
+
+  return (result.messageId as string) || null;
+}
+
+async function sendViaResend(message: Message) {
+  const from = sender();
+
+  if (!from.email) {
+    throw new Error("MAIL_FROM is not set.");
+  }
+
+  const result = await postJson(
+    "https://api.resend.com/emails",
+    {
+      Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+    },
+    {
+      from: from.raw,
+      to: [message.to],
+      subject: message.subject,
+      html: message.html,
+      text: message.text,
+    },
+  );
+
+  return (result.id as string) || null;
+}
+
+/* SMTP transport, built once and reused. */
+
 let transporter: Transporter | null = null;
-let transportError: string | null = null;
 
 async function getTransport() {
-  if (transporter || transportError) {
+  if (transporter) {
     return transporter;
   }
 
-  const host = process.env.EMAIL_HOST;
-  const user = process.env.EMAIL_USER;
-  const pass = process.env.EMAIL_PASS;
+  const host = process.env.EMAIL_HOST as string;
+  const user = process.env.EMAIL_USER as string;
+  const pass = process.env.EMAIL_PASS as string;
 
-  if (!host || !user || !pass) {
-    transportError =
-      "Email is not configured (EMAIL_HOST, EMAIL_USER, EMAIL_PASS).";
-    return null;
-  }
-
-  // Some hosts (Render included) advertise an IPv6 interface that isn't
-  // actually routable, and nodemailer's DNS resolver picks a random address
-  // out of the combined IPv4+IPv6 pool - so it intermittently tries IPv6 and
-  // gets ENETUNREACH. Resolving the A record ourselves and connecting by IP
-  // sidesteps that; `tls.servername` keeps certificate validation checking
-  // against the real hostname instead of the raw IP.
+  // Some hosts advertise an IPv6 interface that is not routable,
+  // and nodemailer picks a random address from the IPv4+IPv6 pool.
+  // Connecting by an IPv4 address avoids ENETUNREACH; tls.servername
+  // keeps the certificate checked against the real hostname.
   let connectHost = host;
   let servername: string | undefined;
+
   if (!net.isIP(host)) {
     try {
       const addresses = await dns.promises.resolve4(host);
       if (addresses.length > 0) {
-        connectHost = addresses[Math.floor(Math.random() * addresses.length)];
+        connectHost =
+          addresses[Math.floor(Math.random() * addresses.length)];
         servername = host;
       }
     } catch {
-      // Fall back to the hostname as-is; nodemailer will resolve it itself.
+      // Fall back to the hostname; nodemailer resolves it itself.
     }
   }
 
@@ -88,18 +214,49 @@ async function getTransport() {
     auth: { user, pass },
     pool: true,
     maxConnections: 3,
+    // Fail fast instead of hanging for two minutes when the port
+    // is blocked, so the row gets an honest error quickly.
+    connectionTimeout: 10_000,
+    greetingTimeout: 10_000,
+    socketTimeout: 20_000,
     ...(servername ? { tls: { servername } } : {}),
   });
 
   return transporter;
 }
 
-export function emailConfigured() {
-  return Boolean(
-    process.env.EMAIL_HOST &&
-      process.env.EMAIL_USER &&
-      process.env.EMAIL_PASS,
-  );
+async function sendViaSmtp(message: Message) {
+  const transport = await getTransport();
+  const from = sender();
+
+  const info = await transport.sendMail({
+    from: from.raw || process.env.EMAIL_USER,
+    to: message.to,
+    subject: message.subject,
+    text: message.text,
+    html: message.html,
+  });
+
+  return info.messageId || null;
+}
+
+async function sendOne(job: { destination: string; code: string }) {
+  const provider = activeProvider();
+  const { subject, text, html } = couponEmail(job.code);
+  const message = { to: job.destination, subject, text, html };
+
+  switch (provider) {
+    case "brevo":
+      return sendViaBrevo(message);
+    case "resend":
+      return sendViaResend(message);
+    case "smtp":
+      return sendViaSmtp(message);
+    default:
+      throw new Error(
+        "Email is not configured. Set BREVO_API_KEY (or RESEND_API_KEY, or EMAIL_HOST/EMAIL_USER/EMAIL_PASS).",
+      );
+  }
 }
 
 /* ------------------------------------------------------------
@@ -145,9 +302,7 @@ export async function queueCouponDelivery(input: {
   } catch (error) {
     /* The unique index rejecting a second row is the guard doing
        its job, not a failure worth shouting about. */
-    if (
-      !String(error).includes("Unique constraint")
-    ) {
+    if (!String(error).includes("Unique constraint")) {
       console.error("QUEUE DELIVERY ERROR:", error);
     }
 
@@ -156,47 +311,20 @@ export async function queueCouponDelivery(input: {
 }
 
 /* ------------------------------------------------------------
-   SEND
+   SEND LOOP
 
-   Claims rows one at a time by bumping attempts before the send
-   rather than after. If the process dies mid-send, the attempt
-   is still counted, so a message that reliably kills the worker
-   cannot be retried forever.
+   Each row is claimed with a conditional update (same id, still
+   pending, same attempt count). If two runs overlap, only one
+   wins the claim and the other skips the row, so nobody gets the
+   email twice. The attempt is counted before the send, so a
+   message that kills the process cannot be retried forever.
+
+   Every write uses updateMany, so a row deleted mid-send (for
+   example from the database dashboard) is skipped instead of
+   crashing the whole run.
    ------------------------------------------------------------ */
 
-async function sendOne(job: {
-  id: string;
-  destination: string;
-  code: string;
-  attempts: number;
-}) {
-  const transport = await getTransport();
-
-  if (!transport) {
-    throw new Error(
-      transportError || "Email is not configured.",
-    );
-  }
-
-  const { subject, text, html } = couponEmail(job.code);
-
-  const info = await transport.sendMail({
-    from:
-      process.env.MAIL_FROM ||
-      process.env.EMAIL_USER,
-    to: job.destination,
-    subject,
-    text,
-    html,
-  });
-
-  return info.messageId || null;
-}
-
-export async function runPendingDeliveries(
-  shop: string,
-  limit = 25,
-) {
+export async function runPendingDeliveries(shop: string, limit = 25) {
   if (!emailConfigured()) {
     return { sent: 0, failed: 0, skipped: true };
   }
@@ -215,15 +343,23 @@ export async function runPendingDeliveries(
   let failed = 0;
 
   for (const job of jobs) {
-    await db.discountDelivery.update({
-      where: { id: job.id },
+    const claim = await db.discountDelivery.updateMany({
+      where: {
+        id: job.id,
+        status: "pending",
+        attempts: job.attempts,
+      },
       data: { attempts: { increment: 1 } },
     });
+
+    if (claim.count === 0) {
+      continue;
+    }
 
     try {
       const providerId = await sendOne(job);
 
-      await db.discountDelivery.update({
+      await db.discountDelivery.updateMany({
         where: { id: job.id },
         data: {
           status: "sent",
@@ -238,14 +374,12 @@ export async function runPendingDeliveries(
       const attempts = job.attempts + 1;
       const givingUp = attempts >= MAX_ATTEMPTS;
 
-      await db.discountDelivery.update({
+      await db.discountDelivery.updateMany({
         where: { id: job.id },
         data: {
           status: givingUp ? "failed" : "pending",
           error: String(
-            error instanceof Error
-              ? error.message
-              : error,
+            error instanceof Error ? error.message : error,
           ).slice(0, 500),
         },
       });
@@ -254,30 +388,23 @@ export async function runPendingDeliveries(
         failed += 1;
       }
 
-      console.error(
-        "DELIVERY ATTEMPT FAILED:",
-        job.id,
-        error,
-      );
+      console.error("DELIVERY ATTEMPT FAILED:", job.id, error);
     }
   }
 
   return { sent, failed, skipped: false };
 }
 
-/* Fire and forget, for the moment right after a submission. The
-   scheduled pass is what actually guarantees delivery; this only
-   makes the common case fast. Render's free instance sleeps on
-   idle, so anything left running past the response can die. */
+/* Fire and forget, right after a submission, so the shopper
+   is not kept waiting on the send. Anything still pending is
+   picked up by the next run. */
 
 export function kickDeliveries(shop: string) {
   if (!emailConfigured()) {
     return;
   }
 
-  void runPendingDeliveries(shop, 5).catch(
-    (error) => {
-      console.error("KICK DELIVERIES ERROR:", error);
-    },
-  );
+  void runPendingDeliveries(shop, 5).catch((error) => {
+    console.error("KICK DELIVERIES ERROR:", error);
+  });
 }
