@@ -192,15 +192,13 @@ model DiscountDelivery {
   @@index([shop, createdAt])
 }
 
-/* An email template built in Settings > Email Templates.
+/* An email template from Settings > Email templates.
 
-   `content` is the source of truth: a versioned JSON document
-   (settings, email headers, blocks) that the builder edits and
-   the renderer turns into HTML. The header columns are copies of
-   what is inside it, kept so the list can show and sort them
-   without parsing every document. `html` is a rendered snapshot
-   with the {{variables}} left in; anything that actually sends
-   should re-render from `content` with real values instead. */
+   `content` holds the form fields (logo, heading, message,
+   button, footer, colors) as versioned JSON; the header columns
+   are copies kept so the list can show them without parsing.
+   `html` is a rendered snapshot with {{variables}} left in;
+   anything that sends should re-render with real values. */
 model EmailTemplate {
   id          String   @id @default(cuid())
   shop        String
