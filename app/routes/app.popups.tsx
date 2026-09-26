@@ -389,7 +389,6 @@ type PopupStatus =
 type TemplateCategory =
   | "all"
   | "list-growth"
-  | "whatsapp"
   | "spin"
   | "quiz"
   | "exit-intent";
@@ -403,15 +402,6 @@ const POPUP_TEMPLATES: {
   category: TemplateCategory;
   swatch: string;
 }[] = [
-  {
-    id: "whatsapp-welcome",
-    name: "WhatsApp welcome",
-    tag: "WhatsApp",
-    tagColor: "#1FAF6E",
-    metric: "11.2% median",
-    category: "whatsapp",
-    swatch: "#F3EEE4",
-  },
   {
     id: "spin-the-wheel-luxe",
     name: "Spin the wheel — luxe",
@@ -447,7 +437,6 @@ const TEMPLATE_FILTERS: {
 }[] = [
   { value: "all", label: "All" },
   { value: "list-growth", label: "List growth" },
-  { value: "whatsapp", label: "WhatsApp-first" },
   { value: "spin", label: "Spin & win" },
   { value: "quiz", label: "Quiz" },
   { value: "exit-intent", label: "Exit intent" },

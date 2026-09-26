@@ -3403,8 +3403,7 @@ export default function Campaigns() {
                   >
                     A one-off send to subscribers you
                     already have — sale announcement,
-                    restock, launch — over email, WhatsApp
-                    or SMS.
+                    restock, launch — over email or SMS.
                   </p>
 
                   <div

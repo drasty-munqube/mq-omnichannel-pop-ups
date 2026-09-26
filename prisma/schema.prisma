@@ -176,7 +176,8 @@ model DiscountDelivery {
   contactId   String
   campaignId  String
 
-  // "email" for now. "whatsapp" slots in here without a migration.
+  // "email" for now. Another channel (for example "sms") slots in
+  // here without a migration.
   channel     String
 
   // The address or number as it was at the time. Kept separate from

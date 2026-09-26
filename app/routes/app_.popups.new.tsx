@@ -172,7 +172,7 @@ function createBlock(type: BlockType): Block {
       break;
 
     case "channel":
-      text = "Continue on WhatsApp";
+      text = "Continue";
       break;
 
     case "quiz":
@@ -262,7 +262,6 @@ function createBlock(type: BlockType): Block {
 ========================================================= */
 
 type TemplateId =
-  | "whatsapp-welcome"
   | "spin-the-wheel-luxe"
   | "quiz-learn-to-earn"
   | "exit-intent-cart-saver";
@@ -282,20 +281,6 @@ const TEMPLATE_CONTENT: Record<
     headerGradientEnd: string;
   }
 > = {
-  "whatsapp-welcome": {
-    popupName: "WhatsApp welcome",
-    teaserText: "🟢 Get updates on WhatsApp",
-    offerHeading: "Join our WhatsApp list",
-    offerText:
-      "Get restock alerts, styling tips, and a welcome code — straight to WhatsApp.",
-    offerButtonText: "Continue on WhatsApp",
-    offerBlockType: "text",
-    successHeading: "You're on the list!",
-    successText:
-      "Check WhatsApp for your welcome code.",
-    headerBackground: "#1B7A57",
-    headerGradientEnd: "#0E4A34",
-  },
   "spin-the-wheel-luxe": {
     popupName: "Spin the wheel — luxe",
     teaserText: "🎡 Spin to win a prize",
