@@ -6,6 +6,8 @@ import net from "node:net";
 import db from "../db.server";
 import { couponEmail } from "./coupon-email";
 import { getEmailTemplate } from "./email-template.server";
+import { getShopInfo } from "./shop-info.server";
+import { unsubscribeUrl as makeUnsubscribeUrl } from "./unsubscribe.server";
 import { renderEmailTemplate } from "./email-template";
 
 /* ============================================================
@@ -188,7 +190,18 @@ type Message = {
   tags?: { name: string; value: string }[];
   // Which saved template was used, if any (for tags and logs).
   templateId?: string;
+  // Personal unsubscribe link, also sent as the List-Unsubscribe
+  // header so inboxes (Gmail, Outlook) can show their own button.
+  unsubscribeUrl?: string;
 };
+
+function unsubscribeHeaders(message: Message): Record<string, string> {
+  if (!message.unsubscribeUrl) return {};
+  return {
+    "List-Unsubscribe": `<${message.unsubscribeUrl}>`,
+    "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+  };
+}
 
 async function sendViaBrevo(message: Message) {
   const from = sender();
@@ -215,6 +228,7 @@ async function sendViaBrevo(message: Message) {
       subject: message.subject,
       htmlContent: message.html,
       textContent: message.text,
+      ...(message.unsubscribeUrl ? { headers: unsubscribeHeaders(message) } : {}),
     },
   );
 
@@ -248,6 +262,7 @@ async function sendViaResend(message: Message) {
       html: message.html,
       text: message.text,
       ...(message.tags?.length ? { tags: message.tags } : {}),
+      ...(message.unsubscribeUrl ? { headers: unsubscribeHeaders(message) } : {}),
     },
   );
 
@@ -318,6 +333,7 @@ async function sendViaSmtp(message: Message) {
         : from.raw || process.env.EMAIL_USER,
     to: message.to,
     ...(message.replyTo ? { replyTo: message.replyTo } : {}),
+    ...(message.unsubscribeUrl ? { headers: unsubscribeHeaders(message) } : {}),
     subject: message.subject,
     text: message.text,
     html: message.html,
@@ -370,21 +386,65 @@ function htmlToText(html: string) {
     .trim();
 }
 
-/* Contact.fields is whatever the popup form collected, keyed by
-   field label. Pick a first/last name when one is obvious. */
-function nameParts(fields: unknown) {
+/* Contact.fields holds what the popup form collected, keyed by
+   the form field's block id. The popup's own blocks say what each
+   field is: its type (email, phone, text...) and the words the
+   shopper saw (placeholder, then the block text). A new field
+   block starts as "Email address" in both, and merchants usually
+   change only one of them, so every label is checked and the
+   field type, not the words, decides what to skip. Keys that
+   already are labels (older rows, other sources) work too. */
+type FieldInfo = { labels: string[]; fieldType: string };
+
+async function fieldInfo(shop: string, popupId: string | null | undefined) {
+  const info = new Map<string, FieldInfo>();
+  if (!popupId) return info;
+  const popup = await db.popup.findFirst({ where: { id: popupId, shop }, select: { steps: true } });
+  const steps = Array.isArray(popup?.steps) ? (popup!.steps as unknown[]) : [];
+  for (const step of steps) {
+    const blocks = (step as { blocks?: unknown })?.blocks;
+    if (!Array.isArray(blocks)) continue;
+    for (const block of blocks as Record<string, unknown>[]) {
+      if (block?.type !== "field" || typeof block.id !== "string") continue;
+      info.set(block.id, {
+        labels: [block.placeholder, block.text].filter((v): v is string => typeof v === "string" && !!v.trim()),
+        fieldType: typeof block.fieldType === "string" ? block.fieldType : "text",
+      });
+    }
+  }
+  return info;
+}
+
+type NameRole = "first" | "last" | "full" | null;
+
+/* Matched on words, so "Full name" is not mistaken for "lname". */
+function nameRole(label: string): NameRole {
+  const t = ` ${label.toLowerCase().replace(/[^a-z]+/g, " ").trim()} `;
+  if (t.trim() === "" || / (company|business|store|shop|user|brand) /.test(t)) return null;
+  if (/ (first|given|fore) ?name | fname /.test(t)) return "first";
+  if (/ (last|family|sur) ?name | lname /.test(t)) return "last";
+  if (/ name /.test(t) && !/ (email|phone|mobile) /.test(t)) return "full";
+  return null;
+}
+
+export function nameParts(fields: unknown, info: Map<string, FieldInfo> = new Map()) {
   const out = { first: "", last: "" };
   if (!fields || typeof fields !== "object") return out;
 
   for (const [key, raw] of Object.entries(fields as Record<string, unknown>)) {
-    if (typeof raw !== "string" || !raw.trim()) continue;
-    const k = key.toLowerCase().replace(/[^a-z]/g, "");
-    const value = raw.trim().slice(0, 80);
+    if (typeof raw !== "string" || !raw.trim() || raw.includes("@")) continue;
+    const field = info.get(key);
+    if (field && ["email", "phone", "number"].includes(field.fieldType)) continue;
 
-    if (!out.first && (k === "firstname" || k === "fname")) out.first = value;
-    else if (!out.last && (k === "lastname" || k === "lname" || k === "surname")) out.last = value;
-    else if (!out.first && (k === "name" || k === "fullname" || k === "yourname")) {
-      const [first, ...rest] = value.split(/\s+/);
+    const labels = field ? field.labels : [key];
+    const role = labels.map(nameRole).find((r) => r !== null) ?? null;
+    if (!role) continue;
+
+    const value = raw.trim().replace(/\s+/g, " ").slice(0, 80);
+    if (role === "first" && !out.first) out.first = value;
+    else if (role === "last" && !out.last) out.last = value;
+    else if (role === "full" && !out.first) {
+      const [first, ...rest] = value.split(" ");
       out.first = first;
       if (!out.last) out.last = rest.join(" ");
     }
@@ -396,7 +456,13 @@ function nameParts(fields: unknown) {
 export async function buildDeliveryMessage(job: DeliveryJob): Promise<Message> {
   const fallback = (): Message => {
     const { subject, text, html } = couponEmail(job.code);
-    return { to: job.destination, subject, text, html };
+    return {
+      to: job.destination,
+      subject,
+      text,
+      html,
+      unsubscribeUrl: makeUnsubscribeUrl(job.shop, job.destination) || undefined,
+    };
   };
 
   const campaign = await db.campaign.findFirst({
@@ -415,7 +481,10 @@ export async function buildDeliveryMessage(job: DeliveryJob): Promise<Message> {
   }
 
   const data = template.data;
-  const content = [data.subject, data.previewText, data.heading, data.body, data.buttonText, data.footerText].join("\n");
+  const content =
+    data.customHtml.trim()
+      ? [data.subject, data.previewText, data.customHtml].join("\n")
+      : [data.subject, data.previewText, data.heading, data.body, data.buttonText, data.footerText].join("\n");
 
   if (!/\{\{\s*discount\.code\s*\}\}/.test(content)) {
     console.warn(
@@ -427,23 +496,27 @@ export async function buildDeliveryMessage(job: DeliveryJob): Promise<Message> {
 
   const contact = await db.contact.findFirst({
     where: { id: job.contactId, shop: job.shop },
-    select: { fields: true },
+    select: { fields: true, popupId: true },
   });
 
-  const name = nameParts(contact?.fields);
-  const shopUrl = `https://${job.shop}`;
+  const [labels, shopInfo] = await Promise.all([
+    fieldInfo(job.shop, contact?.popupId),
+    getShopInfo(job.shop),
+  ]);
+  const name = nameParts(contact?.fields, labels);
+  const unsubscribe = makeUnsubscribeUrl(job.shop, job.destination);
 
   const variables: Record<string, string> = {
-    "customer.firstName": name.first,
+    /* "Hi {{customer.firstName}}" reads "Hi there" when the form
+       did not ask for a name. */
+    "customer.firstName": name.first || "there",
     "customer.lastName": name.last,
     "customer.email": job.destination,
-    "shop.name": job.shop.replace(/\.myshopify\.com$/i, ""),
-    "shop.url": shopUrl,
+    "shop.name": shopInfo.name,
+    "shop.url": shopInfo.url,
     "campaign.name": campaign.name,
     "discount.code": job.code,
-    // No unsubscribe flow exists yet; the store link is the
-    // safest real destination.
-    unsubscribeUrl: shopUrl,
+    unsubscribeUrl: unsubscribe || shopInfo.url,
   };
 
   const rendered = renderEmailTemplate(data, variables);
@@ -458,6 +531,7 @@ export async function buildDeliveryMessage(job: DeliveryJob): Promise<Message> {
     fromName: fromName || undefined,
     replyTo: EMAIL_PATTERN.test(replyTo) ? replyTo : undefined,
     templateId: template.id,
+    unsubscribeUrl: unsubscribe || undefined,
   };
 }
 
@@ -628,7 +702,7 @@ export async function runPendingDeliveries(shop: string, limit = 25) {
           lastEvent: "suppressed",
           lastEventAt: new Date(),
           error:
-            "Not sent: this address bounced or reported spam earlier.",
+            "Not sent: this address unsubscribed, bounced or reported spam earlier.",
         },
       });
       failed += 1;

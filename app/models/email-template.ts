@@ -1,10 +1,20 @@
 /* ============================================================
    EMAIL TEMPLATE (shared)
 
-   A simple, form-based email: logo, heading, message, one
-   button and a footer, plus colors. Used by the editor in the
-   browser (live preview) and by the server (validation, and the
-   HTML snapshot saved with each template).
+   One email, two ways to edit it, always in sync:
+     Design  a simple form: logo, heading, message, one button,
+             footer and colors
+     HTML    the full HTML of the same email
+   `customHtml` is the email that is sent. The Design form edits
+   the marked parts of it in place (see email-sync.ts), and
+   editing the HTML updates the form, so both show one preview.
+   Templates saved before this existed have no customHtml and are
+   rendered from the form fields, which gives the same HTML.
+
+   Subject, preview text, from name and reply-to are separate
+   fields for the inbox. Used by the editor in the browser (live
+   preview) and by the server (validation, and the HTML snapshot
+   saved with each template).
 
    No imports on purpose, so it runs the same in the browser, on
    the server and in plain `node` tests.
@@ -17,9 +27,17 @@ export const TEMPLATE_VERSION = 1;
 
 export type TemplateStatus = "draft" | "active";
 
+export type TemplateMode = "form" | "html";
+
 export type EmailTemplateData = {
   name: string;
   status: TemplateStatus;
+
+  /* The tab the merchant last used in the editor ("form" is the
+     Design tab). It does not change what is sent. */
+  mode: TemplateMode;
+  /* The email that is sent, when filled. */
+  customHtml: string;
 
   /* inbox */
   subject: string;
@@ -67,6 +85,8 @@ export function defaultTemplate(): EmailTemplateData {
   return {
     name: "Untitled template",
     status: "draft",
+    mode: "form",
+    customHtml: "",
     subject: "Your discount from {{shop.name}}",
     previewText: "Here is the code you asked for",
     fromName: "",
@@ -107,6 +127,7 @@ export function normalizeTemplate(raw: unknown): EmailTemplateData {
   }
 
   out.status = out.status === "active" ? "active" : "draft";
+  out.mode = out.mode === "html" ? "html" : "form";
   out.alignment = out.alignment === "left" ? "left" : "center";
   return out as EmailTemplateData;
 }
@@ -181,13 +202,24 @@ export function validateTemplate(t: EmailTemplateData): TemplateErrors {
   text("subject", "Subject", 250, true);
   text("previewText", "Preview text", 250);
   text("fromName", "From name", 100);
+
+  if (/[<>"\r\n]/.test(t.fromName)) errors.fromName = "From name cannot contain < > \" or line breaks.";
+  if (t.replyTo.trim() && !isEmail(t.replyTo.trim())) errors.replyTo = "Enter a valid email address.";
+
+  /* When the HTML is filled it is what gets sent (the Design form
+     edits it in place), so the HTML is what is checked. */
+  if (t.mode === "html" || t.customHtml.trim()) {
+    text("customHtml", "HTML", MAX_HTML_LENGTH, true);
+    if (!errors.customHtml && !/<[a-z!]/i.test(t.customHtml)) {
+      errors.customHtml = "This does not look like HTML. Paste or write your email's HTML code.";
+    }
+    return errors;
+  }
+
   text("heading", "Heading", 250);
   text("body", "Message", 5000, true);
   text("buttonText", "Button text", 100);
   text("footerText", "Footer", 1000);
-
-  if (/[<>"\r\n]/.test(t.fromName)) errors.fromName = "From name cannot contain < > \" or line breaks.";
-  if (t.replyTo.trim() && !isEmail(t.replyTo.trim())) errors.replyTo = "Enter a valid email address.";
 
   const logo = checkUrl(t.logoUrl, false);
   if (logo) errors.logoUrl = logo;
@@ -250,10 +282,92 @@ function hex(value: string, fallback: string) {
   return isHexColor(value) ? value : fallback;
 }
 
+/* ------------------------------------------------------------
+   HTML MODE
+------------------------------------------------------------ */
+
+export const MAX_HTML_LENGTH = 200_000;
+
+/* Email clients strip scripts anyway; this makes sure nothing
+   active is ever stored in the snapshot or sent. Removes script,
+   iframe, object, embed, meta refresh, inline on* handlers and
+   javascript: links. */
+export function sanitizeEmailHtml(html: string) {
+  return html
+    .replace(/<script\b[\s\S]*?<\/script\s*>/gi, "")
+    .replace(/<script\b[^>]*\/?>/gi, "")
+    .replace(/<(iframe|object|embed|frameset|frame|applet)\b[\s\S]*?<\/\1\s*>/gi, "")
+    .replace(/<(iframe|object|embed|frameset|frame|applet|base)\b[^>]*\/?>/gi, "")
+    .replace(/<meta\b[^>]*http-equiv\s*=\s*["']?refresh[^>]*>/gi, "")
+    /* Attribute clean-up only inside tags, so body text such as
+       "buy one = get one" is never touched. */
+    .replace(/<[a-z][a-z0-9-]*\b[^>]*>/gi, (tag) =>
+      tag
+        .replace(/\s+on[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, "")
+        .replace(
+          /(\s(?:href|src|action|formaction|background|xlink:href)\s*=\s*)("\s*(?:javascript|vbscript|data:text\/html)[^"]*"|'\s*(?:javascript|vbscript|data:text\/html)[^']*'|(?:javascript|vbscript|data:text\/html)[^\s>]*)/gi,
+          '$1"#"',
+        ),
+    );
+}
+
+/* Like fillVariables, but values are HTML-escaped because they
+   land inside markup (a first name like <b> must stay text). */
+function fillVariablesHtml(html: string, variables: Record<string, string> | null) {
+  if (!variables) return html;
+  return html.replace(TOKEN, (match, key: string) =>
+    Object.prototype.hasOwnProperty.call(variables, key) ? escapeHtml(variables[key]) : match,
+  );
+}
+
+function renderHtmlMode(t: EmailTemplateData, variables: Record<string, string> | null) {
+  const subject = fillVariables(t.subject, variables);
+  const previewText = fillVariables(t.previewText, variables);
+  let body = sanitizeEmailHtml(fillVariablesHtml(t.customHtml, variables))
+    /* The preheader and <title> always follow the Inbox fields. */
+    .replace(/<div\b[^>]*data-mq="preheader"[^>]*>[\s\S]*?<\/div>\s*/i, "")
+    .replace(/<title>[\s\S]*?<\/title>/i, `<title>${escapeHtml(subject)}</title>`);
+
+  /* Hidden preheader, so the inbox shows the preview text. */
+  const preheader = previewText.trim()
+    ? `<div style="display:none;max-height:0;overflow:hidden;opacity:0;">${escapeHtml(previewText)}</div>`
+    : "";
+
+  if (/<body\b[^>]*>/i.test(body)) {
+    body = body.replace(/<body\b[^>]*>/i, (tag) => `${tag}\n${preheader}`);
+    if (!/^\s*<!doctype/i.test(body)) body = `<!DOCTYPE html>\n${body}`;
+    return { html: body, subject, previewText };
+  }
+
+  /* A fragment: wrap it in a minimal email document. */
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="x-apple-disable-message-reformatting">
+<title>${escapeHtml(subject)}</title>
+</head>
+<body style="margin:0;padding:0;">
+${preheader}
+${body}
+</body>
+</html>`;
+  return { html, subject, previewText };
+}
+
+/* Starting point when switching Design -> HTML: the current
+   design as HTML, with {{variables}} kept. */
+export function designToHtml(t: EmailTemplateData) {
+  return renderEmailTemplate({ ...t, customHtml: "" }, null).html
+    .replace(/<div\b[^>]*data-mq="preheader"[^>]*>[\s\S]*?<\/div>\n?/i, "");
+}
+
 export function renderEmailTemplate(
   t: EmailTemplateData,
   variables: Record<string, string> | null = null,
 ) {
+  if (t.customHtml.trim()) return renderHtmlMode(t, variables);
   const text = (v: string) => escapeHtml(fillVariables(v, variables)).replace(/\r?\n/g, "<br>");
   const align = t.alignment === "left" ? "left" : "center";
   const bg = hex(t.backgroundColor, "#F5F5F5");
@@ -267,35 +381,36 @@ export function renderEmailTemplate(
   const subject = fillVariables(t.subject, variables);
   const previewText = fillVariables(t.previewText, variables);
 
+  /* Every part carries a data-mq marker, and empty optional parts
+     are rendered hidden instead of left out. That is what lets the
+     editor keep Design and HTML in sync: it can find each part in
+     the HTML, read it back into the form, or update it in place. */
   const rows: string[] = [];
+  const hide = (visible: boolean) => (visible ? "" : ' style="display:none;"');
 
   const logo = safeUrl(t.logoUrl, variables);
-  if (logo && logo !== "#") {
-    rows.push(
-      `<tr><td align="${align}" style="padding:32px 32px 8px;"><img src="${logo}" alt="${escapeHtml(fillVariables(t.fromName || "Logo", variables))}" width="140" style="display:inline-block;width:140px;max-width:100%;height:auto;border:0;"></td></tr>`,
-    );
-  }
-
-  if (t.heading.trim()) {
-    rows.push(
-      `<tr><td align="${align}" style="padding:${logo ? 16 : 36}px 32px 8px;font-family:${font};font-size:26px;line-height:1.3;font-weight:700;color:${ink};text-align:${align};">${text(t.heading)}</td></tr>`,
-    );
-  }
+  const hasLogo = !!logo && logo !== "#";
+  rows.push(
+    `<tr data-mq-row="logo"${hide(hasLogo)}><td data-mq="logo-cell" data-mq-align align="${align}" style="padding:32px 32px 8px;text-align:${align};"><img data-mq="logo" src="${hasLogo ? logo : ""}" alt="${escapeHtml(fillVariables(t.fromName || "Logo", variables))}" width="140" style="display:inline-block;width:140px;max-width:100%;height:auto;border:0;"></td></tr>`,
+  );
 
   rows.push(
-    `<tr><td align="${align}" style="padding:12px 32px;font-family:${font};font-size:16px;line-height:1.6;color:${ink};text-align:${align};">${text(t.body)}</td></tr>`,
+    `<tr data-mq-row="heading"${hide(!!t.heading.trim())}><td data-mq="heading" data-mq-align data-mq-ink align="${align}" style="padding:${hasLogo ? 16 : 36}px 32px 8px;font-family:${font};font-size:26px;line-height:1.3;font-weight:700;color:${ink};text-align:${align};">${text(t.heading)}</td></tr>`,
+  );
+
+  rows.push(
+    `<tr data-mq-row="body"><td data-mq="body" data-mq-align data-mq-ink align="${align}" style="padding:12px 32px;font-family:${font};font-size:16px;line-height:1.6;color:${ink};text-align:${align};">${text(t.body)}</td></tr>`,
   );
 
   const href = safeUrl(t.buttonUrl, variables);
-  if (t.buttonText.trim() && href) {
-    rows.push(
-      `<tr><td align="${align}" style="padding:16px 32px 28px;"><table ${T} align="${align}" style="border-collapse:separate;"><tr><td bgcolor="${btn}" style="border-radius:6px;background-color:${btn};"><a href="${href}" target="_blank" style="display:inline-block;padding:13px 28px;font-family:${font};font-size:16px;font-weight:600;line-height:1.2;color:${btnInk};text-decoration:none;border-radius:6px;">${text(t.buttonText)}</a></td></tr></table></td></tr>`,
-    );
-  }
+  const hasButton = !!t.buttonText.trim() && !!href;
+  rows.push(
+    `<tr data-mq-row="button"${hide(hasButton)}><td data-mq="button-cell" data-mq-align align="${align}" style="padding:16px 32px 28px;text-align:${align};"><table ${T} data-mq="button-table" align="${align}" style="border-collapse:separate;"><tr><td data-mq="button-bg" bgcolor="${btn}" style="border-radius:6px;background-color:${btn};"><a data-mq="button" href="${hasButton ? href : ""}" target="_blank" style="display:inline-block;padding:13px 28px;font-family:${font};font-size:16px;font-weight:600;line-height:1.2;color:${btnInk};text-decoration:none;border-radius:6px;">${text(t.buttonText)}</a></td></tr></table></td></tr>`,
+  );
 
   const unsubscribe = variables ? safeUrl("{{unsubscribeUrl}}", variables) : "{{unsubscribeUrl}}";
   rows.push(
-    `<tr><td align="${align}" style="padding:20px 32px 32px;border-top:1px solid #EEF1F4;font-family:${font};font-size:12px;line-height:1.5;color:#6B7785;text-align:${align};">${t.footerText.trim() ? `${text(t.footerText)}<br>` : ""}<a href="${unsubscribe}" target="_blank" style="color:#6B7785;text-decoration:underline;">Unsubscribe</a></td></tr>`,
+    `<tr data-mq-row="footer"><td data-mq="footer-cell" data-mq-align align="${align}" style="padding:20px 32px 32px;border-top:1px solid #EEF1F4;font-family:${font};font-size:12px;line-height:1.5;color:#6B7785;text-align:${align};"><div data-mq="footer"${hide(!!t.footerText.trim())}>${text(t.footerText)}</div><a href="${unsubscribe}" target="_blank" style="color:#6B7785;text-decoration:underline;">Unsubscribe</a></td></tr>`,
   );
 
   const html = `<!DOCTYPE html>
@@ -310,11 +425,11 @@ body{margin:0;padding:0;-webkit-text-size-adjust:100%;}
 @media only screen and (max-width:620px){.mq-card{width:100%!important;}}
 </style>
 </head>
-<body style="margin:0;padding:0;background-color:${bg};">
-<div style="display:none;max-height:0;overflow:hidden;opacity:0;">${escapeHtml(previewText)}</div>
-<table ${T} width="100%" bgcolor="${bg}" style="background-color:${bg};">
+<body data-mq="page-body" style="margin:0;padding:0;background-color:${bg};">
+<div data-mq="preheader" style="display:none;max-height:0;overflow:hidden;opacity:0;">${escapeHtml(previewText)}</div>
+<table ${T} data-mq="page" width="100%" bgcolor="${bg}" style="background-color:${bg};">
 <tr><td align="center" style="padding:24px 12px;">
-<table ${T} class="mq-card" width="600" style="width:600px;max-width:600px;background-color:${card};border-radius:8px;border-collapse:separate;">
+<table ${T} data-mq="card" class="mq-card" width="600" style="width:600px;max-width:600px;background-color:${card};border-radius:8px;border-collapse:separate;">
 ${rows.join("\n")}
 </table>
 </td></tr>
