@@ -13,6 +13,7 @@ import crypto from "node:crypto";
 
 import db from "../db.server";
 import {
+  EMAIL_PAGE_SIZE,
   EVENT_RANK,
   canRetry,
   emailStatus,
@@ -172,7 +173,7 @@ export async function recordEmailEvent(event: ResendEvent): Promise<RecordResult
    EMAIL LOG (admin page)
    ------------------------------------------------------------ */
 
-export const EMAIL_PAGE_SIZE = 25;
+export { EMAIL_PAGE_SIZE };
 
 function filterWhere(filter: EmailFilterKey) {
   switch (filter) {

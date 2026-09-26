@@ -27,13 +27,10 @@ import { color, fontWeight, space, text, zIndex } from "../design/tokens";
 import { AuditDate, stickyEnd } from "../components/audit-cells";
 import { RowActions } from "../components/row-actions";
 import { activeEmailProvider } from "../models/delivery.server";
-import {
-  EMAIL_PAGE_SIZE,
-  listEmailLog,
-  retryEmailDelivery,
-} from "../models/email-events.server";
+import { listEmailLog, retryEmailDelivery } from "../models/email-events.server";
 import {
   EMAIL_FILTERS,
+  EMAIL_PAGE_SIZE,
   EMAIL_STATUS,
   canRetry,
   isEmailFilter,
