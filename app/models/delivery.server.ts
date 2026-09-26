@@ -91,6 +91,11 @@ export function emailConfigured() {
   return activeProvider() !== null;
 }
 
+/* For the Emails page: which provider is sending right now. */
+export function activeEmailProvider() {
+  return activeProvider();
+}
+
 function sender() {
   const raw = (
     process.env.MAIL_FROM ||
@@ -333,6 +338,7 @@ async function sendViaSmtp(message: Message) {
 
 type DeliveryJob = {
   id?: string;
+  round?: number;
   shop: string;
   campaignId: string;
   contactId: string;
@@ -471,7 +477,11 @@ async function sendOne(job: DeliveryJob) {
   const message = await buildDeliveryMessage(job);
 
   if (job.id) {
-    message.idempotencyKey = `coupon-delivery-${job.id}`;
+    /* Round 0 keeps the original key. A manual "Resend" bumps the
+       round, so the provider treats it as a new message. */
+    message.idempotencyKey = job.round
+      ? `coupon-delivery-${job.id}-r${job.round}`
+      : `coupon-delivery-${job.id}`;
   }
 
   message.tags = [
@@ -482,18 +492,30 @@ async function sendOne(job: DeliveryJob) {
     ...(job.id ? [{ name: "delivery_id", value: tagValue(job.id) }] : []),
   ];
 
+  let providerId: string | null;
+
   switch (provider) {
     case "brevo":
-      return sendViaBrevo(message);
+      providerId = await sendViaBrevo(message);
+      break;
     case "resend":
-      return sendViaResend(message);
+      providerId = await sendViaResend(message);
+      break;
     case "smtp":
-      return sendViaSmtp(message);
+      providerId = await sendViaSmtp(message);
+      break;
     default:
       throw new Error(
         "Email is not configured. Set BREVO_API_KEY (or RESEND_API_KEY, or EMAIL_HOST/EMAIL_USER/EMAIL_PASS).",
       );
   }
+
+  return {
+    providerId,
+    provider,
+    subject: message.subject.slice(0, 300),
+    templateId: message.templateId || null,
+  };
 }
 
 /* ------------------------------------------------------------
@@ -579,7 +601,40 @@ export async function runPendingDeliveries(shop: string, limit = 25) {
   let sent = 0;
   let failed = 0;
 
+  /* Addresses that bounced or complained before are not mailed
+     again. One query for the whole batch. */
+  const suppressed = new Set(
+    jobs.length
+      ? (
+          await db.emailSuppression.findMany({
+            where: {
+              shop,
+              email: {
+                in: jobs.map((job) => job.destination.trim().toLowerCase()),
+              },
+            },
+            select: { email: true },
+          })
+        ).map((row) => row.email)
+      : [],
+  );
+
   for (const job of jobs) {
+    if (suppressed.has(job.destination.trim().toLowerCase())) {
+      await db.discountDelivery.updateMany({
+        where: { id: job.id, status: "pending" },
+        data: {
+          status: "failed",
+          lastEvent: "suppressed",
+          lastEventAt: new Date(),
+          error:
+            "Not sent: this address bounced or reported spam earlier.",
+        },
+      });
+      failed += 1;
+      continue;
+    }
+
     const claim = await db.discountDelivery.updateMany({
       where: {
         id: job.id,
@@ -594,16 +649,27 @@ export async function runPendingDeliveries(shop: string, limit = 25) {
     }
 
     try {
-      const providerId = await sendOne(job);
+      const result = await sendOne(job);
+      const now = new Date();
 
       await db.discountDelivery.updateMany({
         where: { id: job.id },
         data: {
           status: "sent",
-          sentAt: new Date(),
-          providerId,
+          sentAt: now,
+          providerId: result.providerId,
+          provider: result.provider,
+          subject: result.subject,
+          templateId: result.templateId,
           error: null,
         },
+      });
+
+      /* A fast webhook may already have recorded "delivered";
+         only fill lastEvent when nothing is there yet. */
+      await db.discountDelivery.updateMany({
+        where: { id: job.id, lastEvent: null },
+        data: { lastEvent: "sent", lastEventAt: now },
       });
 
       sent += 1;

@@ -200,11 +200,49 @@ model DiscountDelivery {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
+  // What was actually sent, recorded at send time for the Emails
+  // page: subject line, saved template (null = built-in coupon
+  // email) and which provider took it ("resend" | "brevo" | "smtp").
+  subject     String?
+  templateId  String?
+  provider    String?
+
+  // Bumped by a manual "Resend" so the provider's idempotency key
+  // changes and the new attempt is not swallowed as a duplicate.
+  round       Int       @default(0)
+
+  // Filled from provider webhooks (Resend). lastEvent is the most
+  // advanced state seen: sent, delayed, delivered, opened, clicked,
+  // bounced, complained, failed, suppressed.
+  lastEvent    String?
+  lastEventAt  DateTime?
+  deliveredAt  DateTime?
+  openedAt     DateTime?
+  clickedAt    DateTime?
+  bouncedAt    DateTime?
+  complainedAt DateTime?
+
   // A shopper who submits twice, or a retried request, must not be
   // sent two coupons.
   @@unique([contactId, channel])
   @@index([shop, status])
   @@index([shop, createdAt])
+  // Webhooks look rows up by the provider's message id.
+  @@index([providerId])
+}
+
+// Addresses that bounced or marked a message as spam. Nothing more
+// is sent to them for this shop, which protects the sender's
+// reputation (and every other shopper's inbox placement).
+model EmailSuppression {
+  id        String   @id @default(cuid())
+  shop      String
+  email     String
+  // "bounced" | "complained"
+  reason    String
+  createdAt DateTime @default(now())
+
+  @@unique([shop, email])
 }
 
 /* An email template from Settings > Email templates.

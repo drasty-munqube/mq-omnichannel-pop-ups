@@ -58,6 +58,10 @@ export default function App() {
           Email templates
         </Link>
 
+        <Link to="/app/emails">
+          Emails
+        </Link>
+
         <Link to="/app/settings">
           Settings
         </Link>

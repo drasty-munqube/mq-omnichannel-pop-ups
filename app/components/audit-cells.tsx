@@ -75,6 +75,22 @@ export function AuditCells({
   );
 }
 
+/* A single two-line date cell (date, then a lighter time), for
+   tables that need a date column outside the four audit ones. */
+export function AuditDate({ value }: { value: string | Date | null | undefined }) {
+  const timeZone = useLocalTimeZone();
+  const parts = auditDateParts(value, timeZone);
+  if (!parts) {
+    return <div style={{ fontSize: "12px", color: "#657080" }}>—</div>;
+  }
+  return (
+    <div title={`${parts.date}, ${parts.time}`} style={{ minWidth: 0, lineHeight: 1.35 }}>
+      <div style={{ ...ellipsis, fontSize: "12px", color: "#374151" }}>{parts.date}</div>
+      <div style={{ ...ellipsis, fontSize: "11px", color: "#8A95A5" }}>{parts.time}</div>
+    </div>
+  );
+}
+
 /* Style for the last (Actions) cell of a row or header. Pass the
    row's own background so content scrolling underneath is
    hidden. */
