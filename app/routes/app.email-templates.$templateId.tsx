@@ -1,12 +1,12 @@
 /* ============================================================
-   SETTINGS > EMAIL TEMPLATE EDITOR
+   EMAIL TEMPLATE EDITOR
 
-   /app/settings/email-templates/new   create
-   /app/settings/email-templates/:id   edit
+   /app/email-templates/new   create
+   /app/email-templates/:id   edit
 
    GET   loader         one template this shop owns
    POST  intent=save    create (id "new") or update
-   POST  intent=delete  delete, then back to Settings
+   POST  intent=delete  delete, then back to the list
 
    A simple form on the left and a live preview on the right.
    The preview uses the same renderEmailTemplate() the server
@@ -54,9 +54,10 @@ import {
   saveEmailTemplate,
   type EmailTemplateRow,
 } from "../models/email-template.server";
+import { actorName } from "../models/actor.server";
 import { authenticate } from "../shopify.server";
 
-const SETTINGS = "/app/settings";
+const LIST = "/app/email-templates";
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const { session } = await authenticate.admin(request);
@@ -72,7 +73,8 @@ type ActionResult =
   | { ok: false; error: string; errors: TemplateErrors };
 
 export async function action({ request, params }: ActionFunctionArgs) {
-  const { session } = await authenticate.admin(request);
+  const auth = await authenticate.admin(request);
+  const { session } = auth;
   const id = params.templateId ?? "new";
   const formData = await request.formData();
   const intent = String(formData.get("intent") || "");
@@ -80,7 +82,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
   try {
     if (intent === "delete" && id !== "new") {
       await deleteEmailTemplate(session.shop, id);
-      return redirect(SETTINGS);
+      return redirect(LIST);
     }
 
     if (intent === "save") {
@@ -90,7 +92,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
       } catch {
         return { ok: false, error: "The form data was not valid.", errors: {} } satisfies ActionResult;
       }
-      const result = await saveEmailTemplate(session.shop, id === "new" ? null : id, input);
+      const result = await saveEmailTemplate(session.shop, id === "new" ? null : id, input, actorName(auth));
       return (result.ok
         ? { ok: true, created: id === "new", template: result.template }
         : { ok: false, error: result.error, errors: result.errors }) satisfies ActionResult;
@@ -205,7 +207,7 @@ export default function EmailTemplateEditor() {
       setShowErrors(false);
       if (actionData.created) {
         allowLeave.current = true;
-        navigate(`/app/settings/email-templates/${actionData.template.id}`, { replace: true });
+        navigate(`/app/email-templates/${actionData.template.id}`, { replace: true });
       }
     } else {
       setShowErrors(true);
@@ -313,8 +315,8 @@ export default function EmailTemplateEditor() {
           <p style={{ ...text.body, color: color.textMuted }}>
             This template was not found. It may have been deleted.
           </p>
-          <Link to={SETTINGS} style={{ ...button("secondary", "md"), textDecoration: "none" }}>
-            Back to Settings
+          <Link to={LIST} style={{ ...button("secondary", "md"), textDecoration: "none" }}>
+            Back to Email templates
           </Link>
         </s-section>
       </s-page>
@@ -330,8 +332,8 @@ export default function EmailTemplateEditor() {
       {/* ---------- top bar ---------- */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: space[5], flexWrap: "wrap", marginBottom: space[6] }}>
         <div style={{ display: "flex", alignItems: "center", gap: space[5], flexWrap: "wrap" }}>
-          <Link to={SETTINGS} style={{ ...button("tertiary", "sm"), textDecoration: "none" }}>
-            ← Settings
+          <Link to={LIST} style={{ ...button("tertiary", "sm"), textDecoration: "none" }}>
+            ← Email templates
           </Link>
           <span style={{ ...text.bodySm, color: dirty ? color.warningText : color.textSubtle }}>
             {saving ? "Saving…" : dirty ? "Unsaved changes" : template ? "All changes saved" : "Not saved yet"}

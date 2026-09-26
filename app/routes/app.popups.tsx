@@ -3,6 +3,10 @@ import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { useActionData, useLoaderData, useNavigate, useNavigation, useRevalidator, useSubmit } from "react-router";
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
+import { AUDIT_GRID, AUDIT_HEADERS } from "../models/audit-format";
+import { AuditCells, stickyEnd } from "../components/audit-cells";
+import { actorName } from "../models/actor.server";
+import { RowActions } from "../components/row-actions";
 
 /* ============================================================
    LOADER
@@ -37,8 +41,10 @@ export async function loader({
 export async function action({
   request,
 }: ActionFunctionArgs) {
-  const { session } =
-    await authenticate.admin(request);
+  const auth = await authenticate.admin(request);
+  const { session } = auth;
+  /* Saved as createdBy / updatedBy on every write below. */
+  const actor = actorName(auth);
 
   const formData =
     await request.formData();
@@ -222,6 +228,8 @@ export async function action({
             status: "draft",
             priority: (last?.priority || 0) + 1,
             steps: popup.steps as object,
+            createdBy: actor,
+            updatedBy: actor,
           },
         });
 
@@ -290,6 +298,7 @@ export async function action({
         },
         data: {
           status: nextStatus,
+          updatedBy: actor,
         },
       });
 
@@ -339,6 +348,7 @@ export async function action({
             },
             data: {
               priority: index + 1,
+              updatedBy: actor,
             },
           }),
         ),
@@ -449,6 +459,8 @@ type PopupRecord = {
   status: string;
   priority: number;
   steps: unknown;
+  createdBy: string;
+  updatedBy: string;
   createdAt: string | Date;
   updatedAt: string | Date;
 };
@@ -1047,25 +1059,6 @@ export default function Popups() {
   };
 
 
-  /* ==========================================================
-     DATE
-     ========================================================== */
-
-  const formatDate = (
-    value: string | Date
-  ) => {
-    return new Date(
-      value
-    ).toLocaleDateString(
-      "en-IN",
-      {
-        day: "2-digit",
-        month: "short",
-        year: "numeric",
-      }
-    );
-  };
-
 
   return (
     <>
@@ -1530,6 +1523,11 @@ export default function Popups() {
           </div>
 
 
+          {/* The table scrolls sideways on narrow screens instead of
+              squeezing the audit columns. */}
+          <div style={{ overflowX: "auto" }}>
+          <div style={{ minWidth: filteredPopups.length ? "1100px" : undefined }}>
+
           {/* =================================================
               TABLE HEADER
           ================================================= */}
@@ -1542,13 +1540,15 @@ export default function Popups() {
                 display:
                   "grid",
                 gridTemplateColumns:
-                  "24px 20px minmax(220px, 1.6fr) 100px 80px 90px 110px 150px",
+                  `24px 20px minmax(180px, 1.6fr) 96px 64px 84px ${AUDIT_GRID} 56px`,
                 gap:
                   "12px",
                 alignItems:
                   "center",
+                /* Matches the rows: 10px margin + border + row
+                   padding, so every header sits over its column. */
                 padding:
-                  "11px 18px",
+                  "11px 29px 11px 29px",
                 background:
                   "#F8F9FA",
                 borderBottom:
@@ -1598,11 +1598,11 @@ export default function Popups() {
                 Priority
               </div>
 
-              <div>
-                Created
-              </div>
+              {AUDIT_HEADERS.map((h) => (
+                <div key={h}>{h}</div>
+              ))}
 
-              <div>
+              <div style={stickyEnd("#F8F9FA")}>
                 Actions
               </div>
 
@@ -1912,12 +1912,14 @@ export default function Popups() {
                     )
                   }
                   style={{
+                    /* 100% plus the 10px side margins used to
+                       push every row 20px past the table. */
                     width:
-                      "100%",
+                      "calc(100% - 20px)",
                     display:
                       "grid",
                     gridTemplateColumns:
-                      "24px 20px minmax(220px, 1.6fr) 100px 80px 90px 110px 150px",
+                      `24px 20px minmax(180px, 1.6fr) 96px 64px 84px ${AUDIT_GRID} 56px`,
                     gap:
                       "12px",
                     alignItems:
@@ -2008,7 +2010,7 @@ export default function Popups() {
 
                   {/* POPUP */}
 
-                  <div>
+                  <div style={{ minWidth: 0 }}>
 
                     <div
                       style={{
@@ -2050,9 +2052,12 @@ export default function Popups() {
                         ▣
                       </div>
 
-                      <div>
+                      {/* minWidth 0 lets a long name shrink and
+                          end in … instead of running into Status. */}
+                      <div style={{ minWidth: 0, flex: 1 }}>
 
                         <strong
+                          title={popup.name}
                           style={{
                             display:
                               "block",
@@ -2062,6 +2067,12 @@ export default function Popups() {
                               "#172033",
                             marginBottom:
                               "4px",
+                            overflow:
+                              "hidden",
+                            textOverflow:
+                              "ellipsis",
+                            whiteSpace:
+                              "nowrap",
                           }}
                         >
                           {popup.name}
@@ -2200,161 +2211,72 @@ export default function Popups() {
                   </div>
 
 
-                  {/* CREATED */}
+                  {/* CREATED BY / MODIFIED BY / DATES */}
+
+                  <AuditCells
+                    createdBy={popup.createdBy}
+                    updatedBy={popup.updatedBy}
+                    createdAt={popup.createdAt}
+                    updatedAt={popup.updatedAt}
+                  />
+
+                  {/* ACTIONS (⋮ menu). Clicks and keys stay inside
+                      so the row's own click / Enter handlers do not
+                      open the editor. */}
 
                   <div
-                    style={{
-                      fontSize:
-                        "11px",
-                      color:
-                        "#7B8795",
-                    }}
-                  >
-                    {formatDate(
-                      popup.createdAt
+                    style={stickyEnd(
+                      isSelected
+                        ? "#EEF3F8"
+                        : isHovered
+                          ? "#F8FAFC"
+                          : "#FFFFFF",
                     )}
-                  </div>
-
-                  {/* ACTIONS */}
-
-                  <div
-                    style={{
-                      display:
-                        "flex",
-                      alignItems:
-                        "center",
-                      gap:
-                        "7px",
-                    }}
                     onClick={(event) => {
                       event.stopPropagation();
                     }}
+                    onKeyDown={(event) => {
+                      event.stopPropagation();
+                    }}
                   >
-                    <button
-                      type="button"
-                      onClick={() =>
-                        handleOpenPopup(
-                          popup.id
-                        )
-                      }
-                      style={{
-                        border:
-                          "1px solid #D5DCE5",
-                        background:
-                          "#FFFFFF",
-                        color:
-                          "#0B3D66",
-                        borderRadius:
-                          "7px",
-                        padding:
-                          "7px 11px",
-                        fontSize:
-                          "11px",
-                        fontWeight:
-                          700,
-                        cursor:
-                          "pointer",
-                      }}
-                    >
-                      Edit
-                    </button>
-
-                    <button
-                      type="button"
-                      disabled={
-                        duplicating &&
-                        duplicatingPopupId ===
-                          popup.id
-                      }
-                      onClick={() =>
-                        handleDuplicatePopup(
-                          popup.id
-                        )
-                      }
-                      style={{
-                        border:
-                          "1px solid #D8DEE6",
-                        background:
-                          "#FFFFFF",
-                        color:
-                          "#374151",
-                        borderRadius:
-                          "7px",
-                        padding:
-                          "7px 11px",
-                        fontSize:
-                          "11px",
-                        fontWeight:
-                          700,
-                        cursor:
-                          duplicating &&
-                          duplicatingPopupId ===
-                            popup.id
-                            ? "not-allowed"
-                            : "pointer",
-                        opacity:
-                          duplicating &&
-                          duplicatingPopupId ===
-                            popup.id
-                            ? 0.6
-                            : 1,
-                      }}
-                    >
-                      {duplicating &&
-                      duplicatingPopupId ===
-                        popup.id
-                        ? "Copying..."
-                        : "Duplicate"}
-                    </button>
-
-                    <button
-                      type="button"
-                      disabled={
-                        deleting &&
-                        deletingPopupId ===
-                          popup.id
-                      }
-                      onClick={() =>
-                        handleDeletePopup(
-                          popup.id,
-                          popup.name
-                        )
-                      }
-                      style={{
-                        border:
-                          "1px solid #F0B9B9",
-                        background:
-                          "#FFF5F5",
-                        color:
-                          "#C62828",
-                        borderRadius:
-                          "7px",
-                        padding:
-                          "7px 11px",
-                        fontSize:
-                          "11px",
-                        fontWeight:
-                          700,
-                        cursor:
-                          deleting &&
-                          deletingPopupId ===
-                            popup.id
-                            ? "not-allowed"
-                            : "pointer",
-                        opacity:
-                          deleting &&
-                          deletingPopupId ===
-                            popup.id
-                            ? 0.6
-                            : 1,
-                      }}
-                    >
-                      {deleting &&
-                      deletingPopupId ===
-                        popup.id
-                        ? "Deleting..."
-                        : "Delete"}
-                    </button>
+                    <RowActions
+                      name={popup.name}
+                      actions={[
+                        {
+                          label: "Edit",
+                          onSelect: () =>
+                            handleOpenPopup(popup.id),
+                        },
+                        {
+                          label:
+                            duplicating &&
+                            duplicatingPopupId === popup.id
+                              ? "Copying..."
+                              : "Duplicate",
+                          onSelect: () =>
+                            handleDuplicatePopup(popup.id),
+                          disabled:
+                            duplicating &&
+                            duplicatingPopupId === popup.id,
+                        },
+                        {
+                          label:
+                            deleting &&
+                            deletingPopupId === popup.id
+                              ? "Deleting..."
+                              : "Delete",
+                          onSelect: () =>
+                            handleDeletePopup(
+                              popup.id,
+                              popup.name,
+                            ),
+                          danger: true,
+                          disabled:
+                            deleting &&
+                            deletingPopupId === popup.id,
+                        },
+                      ]}
+                    />
                   </div>
 
                 </div>
@@ -2362,6 +2284,9 @@ export default function Popups() {
               );
             }
           )}
+
+          </div>
+          </div>
 
           {/* =================================================
               PAGINATION

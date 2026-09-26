@@ -22,6 +22,9 @@ export type EmailTemplateRow = {
   name: string;
   status: "draft" | "active";
   subject: string;
+  createdBy: string;
+  updatedBy: string;
+  createdAt: string;
   updatedAt: string;
   data: EmailTemplateData;
 };
@@ -35,6 +38,9 @@ type DbRow = {
   fromName: string;
   replyTo: string;
   content: unknown;
+  createdBy: string;
+  updatedBy: string;
+  createdAt: Date;
   updatedAt: Date;
 };
 
@@ -53,6 +59,9 @@ function toRow(row: DbRow): EmailTemplateRow {
     name: row.name,
     status: data.status,
     subject: row.subject,
+    createdBy: row.createdBy,
+    updatedBy: row.updatedBy,
+    createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
     data,
   };
@@ -82,6 +91,7 @@ export async function saveEmailTemplate(
   shop: string,
   id: string | null,
   input: unknown,
+  actor = "",
 ): Promise<SaveResult> {
   const data = normalizeTemplate(input);
   data.name = data.name.trim();
@@ -100,6 +110,7 @@ export async function saveEmailTemplate(
     replyTo: data.replyTo.trim(),
     content: toContent(data) as object,
     html: renderEmailTemplate(data).html,
+    updatedBy: actor,
   };
 
   if (id) {
@@ -116,12 +127,12 @@ export async function saveEmailTemplate(
       : { ok: false, error: "This template no longer exists.", errors: {} };
   }
 
-  const created = await db.emailTemplate.create({ data: { ...values, shop } });
+  const created = await db.emailTemplate.create({ data: { ...values, shop, createdBy: actor } });
   return { ok: true, template: toRow(created) };
 }
 
 /* "Welcome" -> "Welcome (copy)", then "(copy 2)". Copies start as drafts. */
-export async function duplicateEmailTemplate(shop: string, id: string) {
+export async function duplicateEmailTemplate(shop: string, id: string, actor = "") {
   const source = await db.emailTemplate.findFirst({ where: { id, shop } });
   if (!source) return null;
 
@@ -142,6 +153,8 @@ export async function duplicateEmailTemplate(shop: string, id: string) {
       replyTo: source.replyTo,
       content: source.content as object,
       html: source.html,
+      createdBy: actor,
+      updatedBy: actor,
     },
   });
   return toRow(created);

@@ -54,6 +54,10 @@ export default function App() {
           Analytics
         </Link>
 
+        <Link to="/app/email-templates">
+          Email templates
+        </Link>
+
         <Link to="/app/settings">
           Settings
         </Link>

@@ -34,6 +34,11 @@ model Popup {
   status    String   @default("draft")
   priority  Int      @default(1)
   steps     Json
+  // Staff member who created / last changed this row, as shown in
+  // the admin lists ("First Last", or their email). Empty for rows
+  // from before this was recorded.
+  createdBy String   @default("")
+  updatedBy String   @default("")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -75,6 +80,16 @@ model Campaign {
   reward               String
   rewardDiscountId     String?
   rewardDiscountCode   String?
+
+  // Email template (EmailTemplate.id) used for the discount email
+  // sent after a submission. Null = the built-in coupon email.
+  emailTemplateId      String?
+
+  // Staff member who created / last changed this row, as shown in
+  // the admin lists ("First Last", or their email). Empty for rows
+  // from before this was recorded.
+  createdBy            String   @default("")
+  updatedBy            String   @default("")
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
 }
@@ -215,6 +230,11 @@ model EmailTemplate {
   content     Json
   html        String   @default("")
 
+  // Staff member who created / last changed this row, as shown in
+  // the admin lists ("First Last", or their email). Empty for rows
+  // from before this was recorded.
+  createdBy   String   @default("")
+  updatedBy   String   @default("")
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 

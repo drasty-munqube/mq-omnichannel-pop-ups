@@ -15,6 +15,7 @@ import {
 
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
+import { actorName } from "../models/actor.server";
 
 /* =========================================================
    TYPES
@@ -646,8 +647,10 @@ export async function loader({
 export async function action({
   request,
 }: ActionFunctionArgs) {
-  const { session } =
-    await authenticate.admin(request);
+  const auth = await authenticate.admin(request);
+  const { session } = auth;
+  /* Saved as createdBy / updatedBy on every write below. */
+  const actor = actorName(auth);
 
   const formData =
     await request.formData();
@@ -738,6 +741,7 @@ export async function action({
             name,
             status,
             steps: steps as any,
+            updatedBy: actor,
           },
         });
 
@@ -755,6 +759,8 @@ export async function action({
           status,
           priority: 1,
           steps: steps as any,
+          createdBy: actor,
+          updatedBy: actor,
         },
       });
 

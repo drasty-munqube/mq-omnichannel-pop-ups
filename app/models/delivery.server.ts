@@ -5,6 +5,8 @@ import net from "node:net";
 
 import db from "../db.server";
 import { couponEmail } from "./coupon-email";
+import { getEmailTemplate } from "./email-template.server";
+import { renderEmailTemplate } from "./email-template";
 
 /* ============================================================
    COUPON DELIVERY
@@ -37,7 +39,11 @@ const MAX_ATTEMPTS = 5;
    Render's free web services block outbound SMTP (ports 25, 465
    and 587), so Gmail SMTP times out there no matter how it is
    configured. Production sends over HTTPS instead, which no host
-   blocks. The first provider that is configured wins:
+   blocks.
+
+   EMAIL_PROVIDER=resend|brevo|smtp picks one explicitly. When it
+   is not set (or names a provider that is not configured), the
+   first configured one wins, in this order:
 
      BREVO_API_KEY   Brevo transactional API (free, 300/day)
      RESEND_API_KEY  Resend API (needs a verified domain)
@@ -50,15 +56,33 @@ const MAX_ATTEMPTS = 5;
 
 type Provider = "brevo" | "resend" | "smtp";
 
+function providerConfigured(provider: Provider) {
+  switch (provider) {
+    case "brevo":
+      return Boolean(process.env.BREVO_API_KEY);
+    case "resend":
+      return Boolean(process.env.RESEND_API_KEY);
+    case "smtp":
+      return Boolean(
+        process.env.EMAIL_HOST &&
+          process.env.EMAIL_USER &&
+          process.env.EMAIL_PASS,
+      );
+  }
+}
+
 function activeProvider(): Provider | null {
-  if (process.env.BREVO_API_KEY) return "brevo";
-  if (process.env.RESEND_API_KEY) return "resend";
-  if (
-    process.env.EMAIL_HOST &&
-    process.env.EMAIL_USER &&
-    process.env.EMAIL_PASS
-  ) {
-    return "smtp";
+  const chosen = (process.env.EMAIL_PROVIDER || "").trim().toLowerCase();
+
+  if (chosen === "brevo" || chosen === "resend" || chosen === "smtp") {
+    if (providerConfigured(chosen)) return chosen;
+    console.warn(
+      `EMAIL_PROVIDER=${chosen} but it is not configured; falling back.`,
+    );
+  }
+
+  for (const provider of ["brevo", "resend", "smtp"] as const) {
+    if (providerConfigured(provider)) return provider;
   }
   return null;
 }
@@ -88,6 +112,27 @@ function sender() {
 
 const HTTP_TIMEOUT_MS = 15_000;
 
+/* A provider answered with an error. `status` decides what the
+   queue does with it:
+     429       rate or daily limit: wait, do not use up an attempt
+     400, 422  the message itself is bad (for example an invalid
+               address): retrying cannot help, fail it now
+     other     network, 5xx, auth: normal retry */
+export class ProviderError extends Error {
+  status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = "ProviderError";
+    this.status = status;
+  }
+  get rateLimited() {
+    return this.status === 429;
+  }
+  get permanent() {
+    return this.status === 400 || this.status === 422;
+  }
+}
+
 async function postJson(
   url: string,
   headers: Record<string, string>,
@@ -107,7 +152,8 @@ async function postJson(
   const text = await response.text();
 
   if (!response.ok) {
-    throw new Error(
+    throw new ProviderError(
+      response.status,
       `HTTP ${response.status}: ${text.slice(0, 300)}`,
     );
   }
@@ -124,6 +170,19 @@ type Message = {
   subject: string;
   text: string;
   html: string;
+  // Optional overrides from the campaign's email template.
+  // The sending address itself always stays MAIL_FROM, which
+  // is the one the provider has verified.
+  fromName?: string;
+  replyTo?: string;
+  // Resend only: the same key within 24h returns the first send's
+  // result instead of sending again, so a retry after a timeout
+  // cannot give the shopper two emails.
+  idempotencyKey?: string;
+  // Resend only: shown and filterable in the Resend dashboard.
+  tags?: { name: string; value: string }[];
+  // Which saved template was used, if any (for tags and logs).
+  templateId?: string;
 };
 
 async function sendViaBrevo(message: Message) {
@@ -137,10 +196,17 @@ async function sendViaBrevo(message: Message) {
     "https://api.brevo.com/v3/smtp/email",
     { "api-key": process.env.BREVO_API_KEY as string },
     {
-      sender: from.name
-        ? { name: from.name, email: from.email }
-        : { email: from.email },
+      sender:
+        message.fromName || from.name
+          ? {
+              name: message.fromName || from.name,
+              email: from.email,
+            }
+          : { email: from.email },
       to: [{ email: message.to }],
+      ...(message.replyTo
+        ? { replyTo: { email: message.replyTo } }
+        : {}),
       subject: message.subject,
       htmlContent: message.html,
       textContent: message.text,
@@ -161,13 +227,22 @@ async function sendViaResend(message: Message) {
     "https://api.resend.com/emails",
     {
       Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+      ...(message.idempotencyKey
+        ? { "Idempotency-Key": message.idempotencyKey }
+        : {}),
     },
     {
-      from: from.raw,
+      from: message.fromName
+        ? `${message.fromName} <${from.email}>`
+        : from.raw,
       to: [message.to],
+      ...(message.replyTo
+        ? { reply_to: message.replyTo }
+        : {}),
       subject: message.subject,
       html: message.html,
       text: message.text,
+      ...(message.tags?.length ? { tags: message.tags } : {}),
     },
   );
 
@@ -229,9 +304,15 @@ async function sendViaSmtp(message: Message) {
   const transport = await getTransport();
   const from = sender();
 
+  const address = from.email || process.env.EMAIL_USER || "";
+
   const info = await transport.sendMail({
-    from: from.raw || process.env.EMAIL_USER,
+    from:
+      message.fromName && address
+        ? { name: message.fromName, address }
+        : from.raw || process.env.EMAIL_USER,
     to: message.to,
+    ...(message.replyTo ? { replyTo: message.replyTo } : {}),
     subject: message.subject,
     text: message.text,
     html: message.html,
@@ -240,10 +321,166 @@ async function sendViaSmtp(message: Message) {
   return info.messageId || null;
 }
 
-async function sendOne(job: { destination: string; code: string }) {
+/* ------------------------------------------------------------
+   MESSAGE
+
+   Uses the email template picked in the campaign's Email step.
+   Falls back to the built-in coupon email when the campaign has
+   no template, the template was deleted, or the template does
+   not contain {{discount.code}} (sending it would leave the
+   shopper without the code they signed up for).
+   ------------------------------------------------------------ */
+
+type DeliveryJob = {
+  id?: string;
+  shop: string;
+  campaignId: string;
+  contactId: string;
+  destination: string;
+  code: string;
+};
+
+const EMAIL_PATTERN = /^[^\s@<>"]+@[^\s@<>"]+\.[^\s@<>"]+$/;
+
+function cleanHeader(value: string, max: number) {
+  return value.replace(/[\r\n"<>]/g, " ").replace(/\s+/g, " ").trim().slice(0, max);
+}
+
+function htmlToText(html: string) {
+  return html
+    .replace(/<(style|head|title)[\s\S]*?<\/\1>/gi, "")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/(p|div|tr|h[1-6]|table)>/gi, "\n")
+    .replace(/<a\s[^>]*href="([^"#][^"]*)"[^>]*>([\s\S]*?)<\/a>/gi, "$2 ($1)")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&amp;/g, "&")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n\s*\n\s*\n+/g, "\n\n")
+    .trim();
+}
+
+/* Contact.fields is whatever the popup form collected, keyed by
+   field label. Pick a first/last name when one is obvious. */
+function nameParts(fields: unknown) {
+  const out = { first: "", last: "" };
+  if (!fields || typeof fields !== "object") return out;
+
+  for (const [key, raw] of Object.entries(fields as Record<string, unknown>)) {
+    if (typeof raw !== "string" || !raw.trim()) continue;
+    const k = key.toLowerCase().replace(/[^a-z]/g, "");
+    const value = raw.trim().slice(0, 80);
+
+    if (!out.first && (k === "firstname" || k === "fname")) out.first = value;
+    else if (!out.last && (k === "lastname" || k === "lname" || k === "surname")) out.last = value;
+    else if (!out.first && (k === "name" || k === "fullname" || k === "yourname")) {
+      const [first, ...rest] = value.split(/\s+/);
+      out.first = first;
+      if (!out.last) out.last = rest.join(" ");
+    }
+  }
+
+  return out;
+}
+
+export async function buildDeliveryMessage(job: DeliveryJob): Promise<Message> {
+  const fallback = (): Message => {
+    const { subject, text, html } = couponEmail(job.code);
+    return { to: job.destination, subject, text, html };
+  };
+
+  const campaign = await db.campaign.findFirst({
+    where: { id: job.campaignId, shop: job.shop },
+    select: { name: true, emailTemplateId: true },
+  });
+
+  if (!campaign?.emailTemplateId) {
+    return fallback();
+  }
+
+  const template = await getEmailTemplate(job.shop, campaign.emailTemplateId);
+
+  if (!template) {
+    return fallback();
+  }
+
+  const data = template.data;
+  const content = [data.subject, data.previewText, data.heading, data.body, data.buttonText, data.footerText].join("\n");
+
+  if (!/\{\{\s*discount\.code\s*\}\}/.test(content)) {
+    console.warn(
+      "EMAIL TEMPLATE HAS NO {{discount.code}}, USING BUILT-IN COUPON EMAIL:",
+      template.id,
+    );
+    return fallback();
+  }
+
+  const contact = await db.contact.findFirst({
+    where: { id: job.contactId, shop: job.shop },
+    select: { fields: true },
+  });
+
+  const name = nameParts(contact?.fields);
+  const shopUrl = `https://${job.shop}`;
+
+  const variables: Record<string, string> = {
+    "customer.firstName": name.first,
+    "customer.lastName": name.last,
+    "customer.email": job.destination,
+    "shop.name": job.shop.replace(/\.myshopify\.com$/i, ""),
+    "shop.url": shopUrl,
+    "campaign.name": campaign.name,
+    "discount.code": job.code,
+    // No unsubscribe flow exists yet; the store link is the
+    // safest real destination.
+    unsubscribeUrl: shopUrl,
+  };
+
+  const rendered = renderEmailTemplate(data, variables);
+  const fromName = cleanHeader(renderFill(data.fromName, variables), 80);
+  const replyTo = data.replyTo.trim();
+
+  return {
+    to: job.destination,
+    subject: cleanHeader(rendered.subject, 200) || couponEmail(job.code).subject,
+    html: rendered.html,
+    text: htmlToText(rendered.html),
+    fromName: fromName || undefined,
+    replyTo: EMAIL_PATTERN.test(replyTo) ? replyTo : undefined,
+    templateId: template.id,
+  };
+}
+
+function renderFill(text: string, variables: Record<string, string>) {
+  return text.replace(/\{\{\s*([a-zA-Z0-9_.]+)\s*\}\}/g, (match, key: string) =>
+    Object.prototype.hasOwnProperty.call(variables, key) ? variables[key] : "",
+  );
+}
+
+/* Resend tag values may only hold letters, numbers, _ and -. */
+function tagValue(value: string) {
+  return value.replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 256) || "none";
+}
+
+async function sendOne(job: DeliveryJob) {
   const provider = activeProvider();
-  const { subject, text, html } = couponEmail(job.code);
-  const message = { to: job.destination, subject, text, html };
+  const message = await buildDeliveryMessage(job);
+
+  if (job.id) {
+    message.idempotencyKey = `coupon-delivery-${job.id}`;
+  }
+
+  message.tags = [
+    { name: "type", value: "coupon" },
+    { name: "shop", value: tagValue(job.shop) },
+    { name: "campaign_id", value: tagValue(job.campaignId) },
+    { name: "template_id", value: tagValue(message.templateId || "builtin") },
+    ...(job.id ? [{ name: "delivery_id", value: tagValue(job.id) }] : []),
+  ];
 
   switch (provider) {
     case "brevo":
@@ -371,8 +608,26 @@ export async function runPendingDeliveries(shop: string, limit = 25) {
 
       sent += 1;
     } catch (error) {
+      /* Rate or daily limit: give the attempt back and stop this
+         run. The row stays pending and goes out on a later run. */
+      if (error instanceof ProviderError && error.rateLimited) {
+        await db.discountDelivery.updateMany({
+          where: { id: job.id, status: "pending" },
+          data: {
+            attempts: { decrement: 1 },
+            error: String(error.message).slice(0, 500),
+          },
+        });
+        console.warn("EMAIL PROVIDER RATE LIMITED, WILL RETRY LATER:", job.id);
+        break;
+      }
+
       const attempts = job.attempts + 1;
-      const givingUp = attempts >= MAX_ATTEMPTS;
+      /* A message the provider rejects outright (bad address,
+         invalid payload) fails now instead of retrying 5 times. */
+      const givingUp =
+        attempts >= MAX_ATTEMPTS ||
+        (error instanceof ProviderError && error.permanent);
 
       await db.discountDelivery.updateMany({
         where: { id: job.id },

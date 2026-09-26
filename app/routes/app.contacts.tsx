@@ -5,6 +5,8 @@ import { useLoaderData } from "react-router";
 
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
+import { AUDIT_GRID, AUDIT_HEADERS } from "../models/audit-format";
+import { AuditCells } from "../components/audit-cells";
 import { kickDeliveries } from "../models/delivery.server";
 
 /* ============================================================
@@ -243,15 +245,6 @@ export default function Contacts() {
     }
   };
 
-  const formatDate = (value: string | Date) =>
-    new Date(value).toLocaleString("en-IN", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-
   return (
     <s-page inlineSize="large">
 
@@ -379,12 +372,13 @@ export default function Contacts() {
 
           ) : (
 
-            <>
+            <div style={{ overflowX: "auto" }}>
+            <div style={{ minWidth: "900px" }}>
               <div
                 style={{
                   display: "grid",
                   gridTemplateColumns:
-                    "1.4fr 1fr 1fr 140px",
+                    `minmax(180px, 1.4fr) minmax(110px, 1fr) minmax(130px, 1fr) ${AUDIT_GRID}`,
                   gap: "12px",
                   padding: "11px 18px",
                   background: "#F8F9FA",
@@ -400,7 +394,9 @@ export default function Contacts() {
                 <div>Contact</div>
                 <div>Popup</div>
                 <div>Page</div>
-                <div>Submitted</div>
+                {AUDIT_HEADERS.map((h) => (
+                  <div key={h}>{h}</div>
+                ))}
               </div>
 
               {contacts.map((contact) => (
@@ -409,7 +405,7 @@ export default function Contacts() {
                   style={{
                     display: "grid",
                     gridTemplateColumns:
-                      "1.4fr 1fr 1fr 140px",
+                      `minmax(180px, 1.4fr) minmax(110px, 1fr) minmax(130px, 1fr) ${AUDIT_GRID}`,
                     gap: "12px",
                     alignItems: "center",
                     padding: "14px 18px",
@@ -417,12 +413,15 @@ export default function Contacts() {
                       "1px solid #EEF1F4",
                   }}
                 >
-                  <div>
+                  <div style={{ minWidth: 0 }}>
                     <strong
                       style={{
                         display: "block",
                         fontSize: "13px",
                         color: "#172033",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
                       }}
                     >
                       {contact.email ||
@@ -485,17 +484,18 @@ export default function Contacts() {
                     )}
                   </div>
 
-                  <div
-                    style={{
-                      fontSize: "11px",
-                      color: "#8A95A5",
-                    }}
-                  >
-                    {formatDate(contact.createdAt)}
-                  </div>
+                  {/* A contact is created by a shopper submitting a popup
+                      and is never edited, so "modified" stays empty. */}
+                  <AuditCells
+                    createdBy={contact.popupName ? `Popup: ${contact.popupName}` : "Shopper"}
+                    updatedBy={null}
+                    createdAt={contact.createdAt}
+                    updatedAt={null}
+                  />
                 </div>
               ))}
-            </>
+            </div>
+            </div>
 
           )}
 

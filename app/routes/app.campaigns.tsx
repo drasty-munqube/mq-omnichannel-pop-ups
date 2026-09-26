@@ -12,6 +12,10 @@ import {
 } from "react-router";
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
+import { actorName } from "../models/actor.server";
+import { RowActions } from "../components/row-actions";
+import { AUDIT_GRID, AUDIT_HEADERS } from "../models/audit-format";
+import { AuditCells, stickyEnd } from "../components/audit-cells";
 import {
   ensureShopifySite,
   listSites,
@@ -483,6 +487,29 @@ export async function loader({
     new URL(request.url).origin
   ).replace(/\/+$/, "");
 
+  /* Email templates the merchant can attach to a campaign.
+     Shop scoped, lightest fields only. */
+
+  const emailTemplates = (
+    await db.emailTemplate.findMany({
+      where: { shop: session.shop },
+      select: {
+        id: true,
+        name: true,
+        subject: true,
+        status: true,
+        updatedAt: true,
+      },
+      orderBy: { updatedAt: "desc" },
+    })
+  ).map((template) => ({
+    id: template.id,
+    name: template.name,
+    subject: template.subject,
+    status: template.status,
+    updatedAt: template.updatedAt.toISOString(),
+  }));
+
   return {
     popups,
     campaigns,
@@ -492,6 +519,7 @@ export async function loader({
     discounts,
     discountsError,
     sites,
+    emailTemplates,
     shop: session.shop,
     appUrl,
   };
@@ -504,8 +532,10 @@ export async function loader({
 export async function action({
   request,
 }: ActionFunctionArgs) {
-  const { session } =
-    await authenticate.admin(request);
+  const auth = await authenticate.admin(request);
+  const { session } = auth;
+  /* Saved as createdBy / updatedBy on every write below. */
+  const actor = actorName(auth);
 
   const formData = await request.formData();
 
@@ -586,6 +616,7 @@ export async function action({
         },
         data: {
           status: nextStatus,
+          updatedBy: actor,
         },
       });
 
@@ -655,6 +686,22 @@ export async function action({
     const rewardDiscountCode = String(
       formData.get("rewardDiscountCode") || "",
     ).trim();
+
+    /* Only keep a template this shop owns; anything else (a
+       deleted template, a guessed id) falls back to the built-in
+       coupon email. */
+    const requestedTemplateId = String(
+      formData.get("emailTemplateId") || "",
+    ).trim();
+
+    const emailTemplateId = requestedTemplateId
+      ? (
+          await db.emailTemplate.findFirst({
+            where: { id: requestedTemplateId, shop: session.shop },
+            select: { id: true },
+          })
+        )?.id ?? null
+      : null;
 
     const pageTargetMode =
       String(
@@ -952,6 +999,8 @@ export async function action({
         rewardDiscountId || null,
       rewardDiscountCode:
         rewardDiscountCode || null,
+      emailTemplateId,
+      updatedBy: actor,
       status:
         intent === "publishCampaign"
           ? "active"
@@ -996,6 +1045,7 @@ export async function action({
           data: {
             ...data,
             shop: session.shop,
+            createdBy: actor,
           },
         },
       );
@@ -1097,6 +1147,7 @@ export default function Campaigns() {
     discounts,
     discountsError,
     sites,
+    emailTemplates,
     shop,
     appUrl,
   } = useLoaderData<typeof loader>();
@@ -1241,7 +1292,7 @@ export default function Campaigns() {
     return options;
   })();
 
-  const totalSteps = 6;
+  const totalSteps = 7;
 
   /* =========================================================
      CAMPAIGN DATA
@@ -1452,6 +1503,12 @@ export default function Campaigns() {
   const [selectedReward, setSelectedReward] =
     useState("");
 
+  /* "" = no template, the built-in coupon email is sent. */
+  const [
+    selectedEmailTemplate,
+    setSelectedEmailTemplate,
+  ] = useState("");
+
   const [
     selectedDiscountId,
     setSelectedDiscountId,
@@ -1508,6 +1565,7 @@ export default function Campaigns() {
     setSelectedPopup("");
     setSelectedTrigger("");
     setSelectedReward("");
+    setSelectedEmailTemplate("");
     setSelectedDiscountId("");
     setDiscountSearch("");
     setTriggerDelaySeconds(5);
@@ -1562,6 +1620,9 @@ export default function Campaigns() {
     setSelectedPopup(campaign.popupId || "");
     setSelectedTrigger(campaign.trigger);
     setSelectedReward(campaign.reward);
+    setSelectedEmailTemplate(
+      campaign.emailTemplateId || "",
+    );
     setSelectedDiscountId(
       campaign.rewardDiscountId || "",
     );
@@ -1730,6 +1791,15 @@ export default function Campaigns() {
       selectedTrigger,
     );
     formData.append("reward", selectedReward);
+    formData.append(
+      "emailTemplateId",
+      emailTemplates.some(
+        (template) =>
+          template.id === selectedEmailTemplate,
+      )
+        ? selectedEmailTemplate
+        : "",
+    );
 
     const chosenDiscount = discounts.find(
       (discount) =>
@@ -2265,12 +2335,13 @@ export default function Campaigns() {
 
           ) : (
 
-            <>
+            <div style={{ overflowX: "auto" }}>
+            <div style={{ minWidth: "1040px" }}>
               <div
                 style={{
                   display: "grid",
                   gridTemplateColumns:
-                    "minmax(220px, 1.6fr) 110px 130px 120px 150px",
+                    `minmax(200px, 1.6fr) 104px 120px 110px ${AUDIT_GRID} 56px`,
                   gap: "12px",
                   alignItems: "center",
                   padding: "11px 18px",
@@ -2288,7 +2359,10 @@ export default function Campaigns() {
                 <div>Status</div>
                 <div>Trigger</div>
                 <div>Pages</div>
-                <div>Actions</div>
+                {AUDIT_HEADERS.map((h) => (
+                  <div key={h}>{h}</div>
+                ))}
+                <div style={stickyEnd("#F8F9FA")}>Actions</div>
               </div>
 
               {campaigns.map((campaign) => {
@@ -2319,7 +2393,7 @@ export default function Campaigns() {
                     style={{
                       display: "grid",
                       gridTemplateColumns:
-                        "minmax(220px, 1.6fr) 110px 130px 120px 150px",
+                        `minmax(200px, 1.6fr) 104px 120px 110px ${AUDIT_GRID} 56px`,
                       gap: "12px",
                       alignItems: "center",
                       padding: "14px 18px",
@@ -2328,12 +2402,16 @@ export default function Campaigns() {
                     }}
                   >
 
-                    <div>
+                    <div style={{ minWidth: 0 }}>
                       <strong
+                        title={campaign.name}
                         style={{
                           display: "block",
                           fontSize: "13px",
                           color: "#172033",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
                         }}
                       >
                         {campaign.name}
@@ -2455,62 +2533,40 @@ export default function Campaigns() {
                         : "All pages"}
                     </div>
 
-                    <div
-                      style={{
-                        display: "flex",
-                        gap: "7px",
-                      }}
-                    >
-                      <button
-                        type="button"
-                        onClick={() =>
-                          handleEditCampaign(
-                            campaign,
-                          )
-                        }
-                        style={{
-                          border:
-                            "1px solid #D5DCE5",
-                          background: "#FFFFFF",
-                          color: "#0B3D66",
-                          borderRadius: "7px",
-                          padding: "7px 11px",
-                          fontSize: "11px",
-                          fontWeight: 700,
-                          cursor: "pointer",
-                        }}
-                      >
-                        Edit
-                      </button>
+                    <AuditCells
+                      createdBy={campaign.createdBy}
+                      updatedBy={campaign.updatedBy}
+                      createdAt={campaign.createdAt}
+                      updatedAt={campaign.updatedAt}
+                    />
 
-                      <button
-                        type="button"
-                        onClick={() =>
-                          handleDeleteCampaign(
-                            campaign.id,
-                            campaign.name,
-                          )
-                        }
-                        style={{
-                          border:
-                            "1px solid #F0B9B9",
-                          background: "#FFF5F5",
-                          color: "#C62828",
-                          borderRadius: "7px",
-                          padding: "7px 11px",
-                          fontSize: "11px",
-                          fontWeight: 700,
-                          cursor: "pointer",
-                        }}
-                      >
-                        Delete
-                      </button>
+                    <div style={stickyEnd("#FFFFFF")}>
+                    <RowActions
+                      name={campaign.name}
+                      actions={[
+                        {
+                          label: "Edit",
+                          onSelect: () =>
+                            handleEditCampaign(campaign),
+                        },
+                        {
+                          label: "Delete",
+                          onSelect: () =>
+                            handleDeleteCampaign(
+                              campaign.id,
+                              campaign.name,
+                            ),
+                          danger: true,
+                        },
+                      ]}
+                    />
                     </div>
 
                   </div>
                 );
               })}
-            </>
+            </div>
+            </div>
 
           )}
 
@@ -2547,8 +2603,10 @@ export default function Campaigns() {
           <div
             style={{
               display: "grid",
+              /* 4 across on desktop, wrapping to 2 or 1 on
+                 narrow screens instead of squashing the text. */
               gridTemplateColumns:
-                "repeat(4, minmax(0, 1fr))",
+                "repeat(auto-fit, minmax(190px, 1fr))",
               gap: "12px",
             }}
           >
@@ -3844,6 +3902,7 @@ export default function Campaigns() {
                   "Target",
                   "Websites",
                   "Reward",
+                  "Email",
                   "Review",
                 ].map((name, index) => {
 
@@ -6726,7 +6785,7 @@ export default function Campaigns() {
 
 
               {/* =================================================
-                  STEP 6 — review
+                  STEP 6 — email template
               ================================================= */}
 
               {wizardStep === 6 && (
@@ -6745,7 +6804,190 @@ export default function Campaigns() {
                       fontWeight: 700,
                     }}
                   >
-                    STEP 6 · REVIEW
+                    STEP 6 · EMAIL
+                  </div>
+
+                  <h2
+                    style={{
+                      margin: "10px 0 8px",
+                      fontSize: "28px",
+                      color: "#172033",
+                    }}
+                  >
+                    Choose an email template
+                  </h2>
+
+                  <p
+                    style={{
+                      margin: 0,
+                      color: "#6B7280",
+                      fontSize: "14px",
+                    }}
+                  >
+                    This email is sent to the shopper
+                    with their discount code after they
+                    sign up. Skip it to send the
+                    built-in coupon email.
+                  </p>
+
+                  <p
+                    style={{
+                      margin: "8px 0 0",
+                      color: "#8A94A6",
+                      fontSize: "12px",
+                    }}
+                  >
+                    The template must include{" "}
+                    <code>{"{{discount.code}}"}</code>.
+                    If it does not, the built-in coupon
+                    email is sent instead so the shopper
+                    still gets their code.
+                  </p>
+
+                  {[
+                    {
+                      id: "",
+                      name: "No template",
+                      subject:
+                        "Send the built-in coupon email.",
+                      status: "",
+                    },
+                    ...emailTemplates,
+                  ].map((template) => {
+                    const isSelected =
+                      selectedEmailTemplate ===
+                      template.id;
+
+                    return (
+                      <button
+                        key={template.id || "none"}
+                        type="button"
+                        aria-pressed={isSelected}
+                        onClick={() =>
+                          setSelectedEmailTemplate(
+                            template.id,
+                          )
+                        }
+                        style={{
+                          width: "100%",
+                          textAlign: "left",
+                          marginTop: template.id
+                            ? "10px"
+                            : "26px",
+                          padding: "15px 18px",
+                          background: isSelected
+                            ? "#F3F7FB"
+                            : "#FFFFFF",
+                          border: isSelected
+                            ? "2px solid #0B3D66"
+                            : "1px solid #DCE3EA",
+                          borderRadius: "10px",
+                          cursor: "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent:
+                            "space-between",
+                          gap: "12px",
+                        }}
+                      >
+                        <span style={{ minWidth: 0 }}>
+                          <strong
+                            style={{
+                              display: "block",
+                              fontSize: "14px",
+                              color: "#172033",
+                            }}
+                          >
+                            {template.name}
+                          </strong>
+
+                          <span
+                            style={{
+                              display: "block",
+                              marginTop: "4px",
+                              fontSize: "12px",
+                              color: "#6B7280",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            {template.id
+                              ? `Subject: ${template.subject || "(no subject)"}`
+                              : template.subject}
+                          </span>
+                        </span>
+
+                        {template.status && (
+                          <span
+                            style={{
+                              flexShrink: 0,
+                              fontSize: "11px",
+                              fontWeight: 600,
+                              padding: "3px 8px",
+                              borderRadius: "999px",
+                              background:
+                                template.status ===
+                                "active"
+                                  ? "#E7F6EC"
+                                  : "#F1F3F6",
+                              color:
+                                template.status ===
+                                "active"
+                                  ? "#1F7A3D"
+                                  : "#5B6472",
+                              textTransform:
+                                "capitalize",
+                            }}
+                          >
+                            {template.status}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+
+                  {emailTemplates.length === 0 && (
+                    <p
+                      style={{
+                        marginTop: "16px",
+                        fontSize: "13px",
+                        color: "#6B7280",
+                      }}
+                    >
+                      You have no email templates yet.
+                      Create one from the Email
+                      templates page, then come back
+                      to pick it here.
+                    </p>
+                  )}
+
+                </div>
+
+              )}
+
+
+              {/* =================================================
+                  STEP 7 — review
+              ================================================= */}
+
+              {wizardStep === 7 && (
+
+                <div
+                  style={{
+                    maxWidth: "1040px",
+                    margin: "0 auto",
+                  }}
+                >
+
+                  <div
+                    style={{
+                      color: "#7651D8",
+                      fontSize: "11px",
+                      fontWeight: 700,
+                    }}
+                  >
+                    STEP 7 · REVIEW
                   </div>
 
                   <h2
@@ -6979,6 +7221,33 @@ export default function Campaigns() {
                             </span>
                           );
                         })()}
+                      </div>
+
+                      <div>
+                        <span
+                          style={{
+                            display: "block",
+                            fontSize: "11px",
+                            color: "#9AA4B2",
+                            marginBottom: "4px",
+                          }}
+                        >
+                          EMAIL TEMPLATE
+                        </span>
+
+                        <strong
+                          style={{
+                            color: "#172033",
+                            fontSize: "14px",
+                          }}
+                        >
+                          {emailTemplates.find(
+                            (template) =>
+                              template.id ===
+                              selectedEmailTemplate,
+                          )?.name ||
+                            "Built-in coupon email"}
+                        </strong>
                       </div>
 
                       <div>

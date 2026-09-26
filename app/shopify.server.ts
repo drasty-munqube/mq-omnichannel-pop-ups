@@ -33,6 +33,12 @@ const shopify = shopifyApp({
      apps created inside a store's own admin. */
   distribution: AppDistribution.SingleMerchant,
 
+  /* Online tokens carry the signed-in staff member, which is how
+     the lists can show who created and last changed each item.
+     The library still stores an offline token per shop, so the
+     app proxy, webhooks and background sending keep working. */
+  useOnlineTokens: true,
+
   future: {
     expiringOfflineAccessTokens: true,
   },
