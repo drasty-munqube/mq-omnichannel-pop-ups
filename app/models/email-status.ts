@@ -2,7 +2,7 @@
    EMAIL STATUS (shared, browser-safe)
 
    One place that turns a DiscountDelivery row (queue status +
-   the last provider event) into what the Emails page shows.
+   the last provider event) into what the Logs page shows.
    ============================================================ */
 
 export type EmailStatusKey =
@@ -32,12 +32,12 @@ export const EMAIL_STATUS: Record<EmailStatusKey, { label: string; tone: EmailSt
   failed: { label: "Failed", tone: "danger" },
 };
 
-/* Rows per page on the Emails page. Lives here (not in the
+/* Rows per page on the Logs page. Lives here (not in the
    .server module) because the page component uses it in the
    browser too. */
 export const EMAIL_PAGE_SIZE = 25;
 
-/* Filter tabs on the Emails page. "bounced" also covers spam
+/* Filter tabs on the Logs page. "bounced" also covers spam
    reports; "failed" also covers suppressed addresses. */
 export const EMAIL_FILTERS = [
   { key: "all", label: "All" },

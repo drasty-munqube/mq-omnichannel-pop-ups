@@ -279,3 +279,30 @@ model EmailTemplate {
 
   @@index([shop, updatedAt])
 }
+
+/* A sending domain from Settings > Channels > Email.
+
+   Resend is the source of truth: this row only records which
+   shop owns which Resend domain, plus a cached copy of the name,
+   region and status so lists load without a round trip. The
+   cache is refreshed every time the domains page or a domain's
+   own page loads, and rows whose domain was removed in Resend
+   are dropped then.
+
+   Resend does not return a domain's TLS setting, so the last
+   value saved from this app is kept here. */
+model EmailDomain {
+  id        String   @id @default(cuid())
+  shop      String
+  resendId  String   @unique
+  name      String
+  region    String
+  status    String
+  tls       String   @default("opportunistic")
+  createdBy String   @default("")
+  // When the domain was created in Resend.
+  createdAt DateTime
+  syncedAt  DateTime @default(now())
+
+  @@index([shop, createdAt])
+}

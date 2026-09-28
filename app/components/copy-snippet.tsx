@@ -15,9 +15,14 @@ import { useState } from "react";
 export function CopyButton({
   value,
   label = "Copy code",
+  compact = false,
+  ariaLabel,
 }: {
   value: string;
   label?: string;
+  /* A small light button, for tables with many values. */
+  compact?: boolean;
+  ariaLabel?: string;
 }) {
   const [copied, setCopied] = useState(false);
 
@@ -56,10 +61,35 @@ export function CopyButton({
     }
   };
 
+  if (compact) {
+    return (
+      <button
+        type="button"
+        onClick={copy}
+        aria-label={ariaLabel}
+        style={{
+          padding: "4px 10px",
+          fontSize: 12,
+          fontWeight: 600,
+          color: copied ? "#0A6E4A" : "#1F2937",
+          background: copied ? "#D9F2E6" : "#FFFFFF",
+          border: `1px solid ${copied ? "#A7DCC4" : "#D5DAE1"}`,
+          borderRadius: 6,
+          cursor: "pointer",
+          whiteSpace: "nowrap",
+          flexShrink: 0,
+        }}
+      >
+        {copied ? "Copied" : label}
+      </button>
+    );
+  }
+
   return (
     <button
       type="button"
       onClick={copy}
+      aria-label={ariaLabel}
       style={{
         padding: "8px 14px",
         fontSize: 13,

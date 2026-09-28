@@ -1,5 +1,8 @@
 /* ============================================================
-   EMAILS (log page, like resend.com/emails)
+   LOGS (email log page, like resend.com/emails)
+
+   Shown as "Logs" in the app menu. The URL stays /app/emails so
+   existing links and bookmarks keep working.
 
    Every email the app has queued or sent for this shop: who it
    went to, which campaign and template, and how far it got
@@ -217,7 +220,7 @@ export default function EmailsPage() {
   const pages = Math.max(1, Math.ceil(total / EMAIL_PAGE_SIZE));
 
   return (
-    <s-page heading="Emails" inlineSize="large">
+    <s-page heading="Logs" inlineSize="large">
       <s-section>
         <p style={{ margin: `0 0 ${space[5]}`, ...text.body, color: color.textMuted }}>
           Every discount email sent to shoppers, and how far it got.

@@ -5,7 +5,7 @@
       matching DiscountDelivery row forward (delivered, opened,
       clicked, bounced...). Bounces and spam reports add the
       address to EmailSuppression so it is not mailed again.
-   2. The Emails page: list, filter and retry deliveries, always
+   2. The Logs page: list, filter and retry deliveries, always
       scoped to the shop from the admin session.
    ============================================================ */
 

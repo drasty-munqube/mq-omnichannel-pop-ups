@@ -93,7 +93,7 @@ export function emailConfigured() {
   return activeProvider() !== null;
 }
 
-/* For the Emails page: which provider is sending right now. */
+/* For the Logs page: which provider is sending right now. */
 export function activeEmailProvider() {
   return activeProvider();
 }
