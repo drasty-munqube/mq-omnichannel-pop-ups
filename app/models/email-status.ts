@@ -32,6 +32,11 @@ export const EMAIL_STATUS: Record<EmailStatusKey, { label: string; tone: EmailSt
   failed: { label: "Failed", tone: "danger" },
 };
 
+/* One email's page (with its Timeline) in Logs. */
+export function emailPath(id: string) {
+  return `/app/emails/${encodeURIComponent(id)}`;
+}
+
 /* Rows per page on the Logs page. Lives here (not in the
    .server module) because the page component uses it in the
    browser too. */

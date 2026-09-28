@@ -77,9 +77,9 @@ export function AuditCells({
 
 /* A single two-line date cell (date, then a lighter time), for
    tables that need a date column outside the four audit ones. */
-export function AuditDate({ value }: { value: string | Date | null | undefined }) {
+export function AuditDate({ value, seconds = false }: { value: string | Date | null | undefined; seconds?: boolean }) {
   const timeZone = useLocalTimeZone();
-  const parts = auditDateParts(value, timeZone);
+  const parts = auditDateParts(value, timeZone, { seconds });
   if (!parts) {
     return <div style={{ fontSize: "12px", color: "#657080" }}>—</div>;
   }

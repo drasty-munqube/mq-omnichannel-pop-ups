@@ -584,11 +584,14 @@ async function sendOne(job: DeliveryJob) {
       );
   }
 
+  const from = sender();
+
   return {
     providerId,
     provider,
     subject: message.subject.slice(0, 300),
     templateId: message.templateId || null,
+    fromAddress: (message.fromName && from.email ? `${message.fromName} <${from.email}>` : from.raw).slice(0, 300) || null,
   };
 }
 
@@ -735,6 +738,7 @@ export async function runPendingDeliveries(shop: string, limit = 25) {
           provider: result.provider,
           subject: result.subject,
           templateId: result.templateId,
+          fromAddress: result.fromAddress,
           error: null,
         },
       });

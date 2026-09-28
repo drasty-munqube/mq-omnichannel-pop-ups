@@ -223,6 +223,13 @@ model DiscountDelivery {
   bouncedAt    DateTime?
   complainedAt DateTime?
 
+  // The From line it was sent with ("Store <hi@store.com>"), for the
+  // email's page in Logs. Older rows are filled from Resend.
+  fromAddress      String?
+  // Last time the email's page asked Resend for its status, so
+  // polling the page does not call Resend every few seconds.
+  providerSyncedAt DateTime?
+
   // A shopper who submits twice, or a retried request, must not be
   // sent two coupons.
   @@unique([contactId, channel])
@@ -305,4 +312,38 @@ model EmailDomain {
   syncedAt  DateTime @default(now())
 
   @@index([shop, createdAt])
+}
+
+/* One provider event for an email (Resend webhooks): sent,
+   delivered, delivery_delayed, opened, clicked, bounced,
+   complained, failed, scheduled, suppressed, and any new type
+   Resend adds later. The email's Timeline in Logs lists these in
+   time order.
+
+   dedupeKey is the webhook's svix-id, so a webhook Resend delivers
+   twice is stored once. */
+model EmailEvent {
+  id          String   @id @default(cuid())
+  shop        String
+  deliveryId  String
+  // Resend's email id. A "Send again" gives the email a new one, so
+  // events from the earlier attempt can be told apart.
+  providerId  String
+  // As Resend names it, e.g. "email.clicked".
+  type        String
+  occurredAt  DateTime
+  dedupeKey   String   @unique
+
+  // Filled for the event types that carry them.
+  link        String?
+  bounceType  String?
+  bounceSubType String?
+  reason      String?
+
+  // The event's data, without the large or personal fields.
+  payload     Json?
+  createdAt   DateTime @default(now())
+
+  @@index([deliveryId, occurredAt])
+  @@index([shop])
 }

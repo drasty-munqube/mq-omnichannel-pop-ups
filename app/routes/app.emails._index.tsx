@@ -9,24 +9,28 @@
    (queued, sent, delivered, opened, clicked, bounced, failed).
    Delivery states come from Resend webhooks.
 
+   Each row opens that email's page with its live Timeline
+   (app.emails.$deliveryId.tsx).
+
    GET   ?status=&q=&page=   filtered, paginated list
    POST  intent=retry        put a failed email back in the queue
    ============================================================ */
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import {
   Form,
   Link,
   useActionData,
   useLoaderData,
+  useNavigate,
   useNavigation,
   useSubmit,
 } from "react-router";
 import { useAppBridge } from "@shopify/app-bridge-react";
 
-import { badge, button, input, modalOverlay, modalPanel, tableHead, tableRow } from "../design/styles";
-import { color, fontWeight, space, text, zIndex } from "../design/tokens";
+import { badge, button, input, tableHead, tableRow } from "../design/styles";
+import { color, fontWeight, space, text } from "../design/tokens";
 import { AuditDate, stickyEnd } from "../components/audit-cells";
 import { RowActions } from "../components/row-actions";
 import { activeEmailProvider } from "../models/delivery.server";
@@ -36,6 +40,7 @@ import {
   EMAIL_PAGE_SIZE,
   EMAIL_STATUS,
   canRetry,
+  emailPath,
   isEmailFilter,
   type EmailFilterKey,
 } from "../models/email-status";
@@ -103,104 +108,15 @@ function hrefFor(filter: string, q: string, page = 1) {
   return `/app/emails${s ? `?${s}` : ""}`;
 }
 
-function Details({ row, onClose }: { row: Row; onClose: () => void }) {
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
-
-  const steps: { label: string; at: string | null; bad?: boolean }[] = [
-    { label: "Queued", at: row.createdAt },
-    { label: "Sent", at: row.sentAt },
-    { label: "Delivered", at: row.deliveredAt },
-    { label: "Opened", at: row.openedAt },
-    { label: "Clicked", at: row.clickedAt },
-  ];
-  if (row.bouncedAt) steps.push({ label: "Bounced", at: row.bouncedAt, bad: true });
-  if (row.complainedAt) steps.push({ label: "Marked as spam", at: row.complainedAt, bad: true });
-
-  return (
-    <div role="presentation" style={{ ...modalOverlay(), zIndex: zIndex.modal }} onClick={onClose}>
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="mq-email-title"
-        style={{ ...modalPanel(), maxWidth: "560px", width: "calc(100% - 32px)" }}
-        onClick={(event) => event.stopPropagation()}
-      >
-        <div style={{ padding: space[7], display: "grid", gap: space[5] }}>
-          <div style={{ display: "flex", justifyContent: "space-between", gap: space[4], alignItems: "flex-start" }}>
-            <div style={{ minWidth: 0 }}>
-              <h3 id="mq-email-title" style={{ margin: 0, ...text.h3, color: color.textStrong, overflowWrap: "anywhere" }}>
-                {row.subject || "Discount email"}
-              </h3>
-              <div style={{ ...text.body, color: color.textMuted, marginTop: space[2], overflowWrap: "anywhere" }}>
-                To {row.to}
-              </div>
-            </div>
-            <StatusBadge status={row.status} />
-          </div>
-
-          <dl style={{ margin: 0, display: "grid", gridTemplateColumns: "120px 1fr", rowGap: space[3], columnGap: space[4], ...text.body }}>
-            <dt style={{ color: color.textMuted }}>Campaign</dt>
-            <dd style={{ margin: 0, color: color.text }}>{row.campaignName || "—"}</dd>
-            <dt style={{ color: color.textMuted }}>Template</dt>
-            <dd style={{ margin: 0, color: color.text }}>{row.templateName || "Built-in coupon email"}</dd>
-            <dt style={{ color: color.textMuted }}>Sent with</dt>
-            <dd style={{ margin: 0, color: color.text, textTransform: "capitalize" }}>{row.provider || "—"}</dd>
-            <dt style={{ color: color.textMuted }}>Attempts</dt>
-            <dd style={{ margin: 0, color: color.text }}>{row.attempts}</dd>
-          </dl>
-
-          <div>
-            <div style={{ ...text.eyebrow, color: color.textSubtle, marginBottom: space[3] }}>Timeline</div>
-            <ol style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: space[3] }}>
-              {steps.map((step) => (
-                <li key={step.label} style={{ display: "grid", gridTemplateColumns: "14px 1fr auto", gap: space[4], alignItems: "center" }}>
-                  <span
-                    aria-hidden
-                    style={{
-                      width: "10px",
-                      height: "10px",
-                      borderRadius: "999px",
-                      background: step.at ? (step.bad ? color.dangerText : color.successText) : color.borderStrong,
-                    }}
-                  />
-                  <span style={{ ...text.body, color: step.at ? color.textStrong : color.textMuted, fontWeight: step.at ? fontWeight.medium : undefined }}>
-                    {step.label}
-                  </span>
-                  {step.at ? <AuditDate value={step.at} /> : <span style={{ ...text.bodySm, color: color.textMuted }}>Not yet</span>}
-                </li>
-              ))}
-            </ol>
-          </div>
-
-          {row.error ? (
-            <div role="note" style={{ padding: space[5], borderRadius: "10px", background: color.dangerSurface, color: color.dangerText, ...text.body, overflowWrap: "anywhere" }}>
-              {row.error}
-            </div>
-          ) : null}
-        </div>
-        <div style={{ display: "flex", justifyContent: "flex-end", padding: `${space[5]} ${space[7]}`, borderTop: `1px solid ${color.borderSubtle}`, background: color.surfaceSunken }}>
-          <button type="button" style={button("secondary", "md")} onClick={onClose}>
-            Close
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export default function EmailsPage() {
   const { rows, total, filter, q, page, setup, loadError } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
   const submit = useSubmit();
   const shopify = useAppBridge();
-  const [viewing, setViewing] = useState<Row | null>(null);
+  const navigate = useNavigate();
+  /* Loading state while an email's page opens. */
+  const openingEmail = navigation.state === "loading" && /^\/app\/emails\/[^/]+$/.test(navigation.location?.pathname || "");
 
   const retryingId =
     navigation.state === "submitting" ? String(navigation.formData?.get("deliveryId") || "") : "";
@@ -280,7 +196,10 @@ export default function EmailsPage() {
             </div>
           </div>
         ) : (
-          <div style={{ overflowX: "auto", border: `1px solid ${color.border}`, borderRadius: "12px" }}>
+          <div
+            aria-busy={openingEmail}
+            style={{ overflowX: "auto", border: `1px solid ${color.border}`, borderRadius: "12px", opacity: openingEmail ? 0.6 : 1, transition: "opacity 150ms" }}
+          >
             <div style={{ minWidth: "780px" }}>
               <div style={tableHead(COLUMNS)}>
                 <span>To</span>
@@ -290,7 +209,7 @@ export default function EmailsPage() {
                 <span style={stickyEnd(color.surfaceSunken)}>Actions</span>
               </div>
               {rows.map((row) => {
-                const actions = [{ label: "View details", onSelect: () => setViewing(row) }];
+                const actions = [{ label: "View timeline", onSelect: () => navigate(emailPath(row.id)) }];
                 if (canRetry(row.status)) {
                   actions.push({
                     label: retryingId === row.id ? "Sending…" : "Send again",
@@ -300,22 +219,21 @@ export default function EmailsPage() {
                 return (
                   <div key={row.id} style={tableRow(COLUMNS)}>
                     <div style={{ minWidth: 0 }}>
-                      <button
-                        type="button"
-                        onClick={() => setViewing(row)}
+                      <Link
+                        to={emailPath(row.id)}
                         title={row.to}
-                        style={{ all: "unset", cursor: "pointer", display: "block", maxWidth: "100%", ...text.body, fontWeight: fontWeight.semibold, color: color.textStrong, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                        style={{ display: "block", maxWidth: "100%", ...text.body, fontWeight: fontWeight.semibold, color: color.textStrong, textDecoration: "none", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
                       >
                         {row.to}
-                      </button>
+                      </Link>
                       <div style={{ ...text.bodySm, color: color.textMuted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                         {row.campaignName || "Deleted campaign"}
                       </div>
                     </div>
                     <div style={{ minWidth: 0 }}>
-                      <div title={row.subject || ""} style={{ ...text.body, color: color.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      <Link to={emailPath(row.id)} title={row.subject || ""} style={{ display: "block", ...text.body, color: color.text, textDecoration: "none", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                         {row.subject || (row.status === "queued" ? "Waiting to send" : "—")}
-                      </div>
+                      </Link>
                       <div style={{ ...text.bodySm, color: color.textMuted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                         {row.templateName || "Built-in coupon email"}
                       </div>
@@ -355,7 +273,6 @@ export default function EmailsPage() {
         ) : null}
       </s-section>
 
-      {viewing ? <Details row={viewing} onClose={() => setViewing(null)} /> : null}
     </s-page>
   );
 }

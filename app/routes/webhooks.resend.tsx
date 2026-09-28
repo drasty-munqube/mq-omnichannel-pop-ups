@@ -7,6 +7,10 @@
    RESEND_WEBHOOK_SECRET (from Resend > Webhooks), so nobody can
    post fake "delivered" or "bounced" events.
 
+   Each event is stored once for the email's Timeline in Logs
+   (keyed by svix-id), so a retried or duplicated webhook is
+   harmless.
+
    Always answers 2xx for events we cannot match (for example
    emails sent from a local dev server), so Resend does not keep
    retrying them.
@@ -56,7 +60,11 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   try {
-    const result = await recordEmailEvent(event as Parameters<typeof recordEmailEvent>[0]);
+    /* svix-id is the same on every retry of one event, so it makes
+       storing the event idempotent. */
+    const result = await recordEmailEvent(event as Parameters<typeof recordEmailEvent>[0], {
+      webhookId: request.headers.get("svix-id"),
+    });
     return Response.json({ ok: true, result });
   } catch (error) {
     // 500 lets Resend retry later (for example a database blip).

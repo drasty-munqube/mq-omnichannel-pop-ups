@@ -41,6 +41,7 @@ export function auditDate(value: string | Date | null | undefined) {
 export function auditDateParts(
   value: string | Date | null | undefined,
   timeZone?: string,
+  options: { seconds?: boolean } = {},
 ): { date: string; time: string } | null {
   if (!value) return null;
   const date = value instanceof Date ? value : new Date(value);
@@ -48,10 +49,15 @@ export function auditDateParts(
   try {
     return {
       date: date.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric", timeZone }),
-      time: date.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", timeZone }),
+      time: date.toLocaleTimeString("en-IN", {
+        hour: "2-digit",
+        minute: "2-digit",
+        ...(options.seconds ? { second: "2-digit" as const } : {}),
+        timeZone,
+      }),
     };
   } catch {
     const iso = date.toISOString();
-    return { date: iso.slice(0, 10), time: iso.slice(11, 16) };
+    return { date: iso.slice(0, 10), time: iso.slice(11, options.seconds ? 19 : 16) };
   }
 }

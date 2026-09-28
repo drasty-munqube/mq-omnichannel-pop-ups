@@ -7,6 +7,8 @@
       address to EmailSuppression so it is not mailed again.
    2. The Logs page: list, filter and retry deliveries, always
       scoped to the shop from the admin session.
+   3. One email's page: its details and every stored event for
+      the Timeline, checked against Resend.
    ============================================================ */
 
 import crypto from "node:crypto";
@@ -20,6 +22,8 @@ import {
   type EmailFilterKey,
 } from "./email-status";
 import { kickDeliveries } from "./delivery.server";
+import { LAST_EVENT_NAME, type ResendWebhookEvent } from "./email-timeline";
+import { syncEmailFromResend } from "./resend-emails.server";
 
 /* ------------------------------------------------------------
    WEBHOOK SIGNATURE (Svix scheme, used by Resend)
@@ -67,47 +71,122 @@ export function verifyResendSignature(
 
 /* ------------------------------------------------------------
    RECORD ONE EVENT
+
+   1. Find the email: by Resend's email id, or, when the webhook
+      beats the send loop to saving that id, by the delivery_id tag
+      every email is sent with.
+   2. Store the event once (dedupeKey = the webhook's svix-id), so
+      a webhook Resend retries or delivers twice is a no-op.
+   3. Move the delivery row forward (status, first-time columns,
+      suppression list). Only ever forward, so events arriving out
+      of order do not undo a later state.
    ------------------------------------------------------------ */
 
-type ResendEvent = {
-  type?: string;
-  created_at?: string;
-  data?: {
-    email_id?: string;
-    created_at?: string;
-    bounce?: { type?: string; subType?: string; message?: string };
-    failed?: { reason?: string };
-    [key: string]: unknown;
-  };
-};
+type ResendEvent = ResendWebhookEvent;
 
-const EVENT_NAMES: Record<string, string> = {
-  "email.sent": "sent",
-  "email.delivery_delayed": "delayed",
-  "email.delivered": "delivered",
-  "email.opened": "opened",
-  "email.clicked": "clicked",
-  "email.bounced": "bounced",
-  "email.complained": "complained",
-  "email.failed": "failed",
-  "email.suppressed": "suppressed",
-};
+export type RecordResult = "ok" | "duplicate" | "ignored" | "not_found";
 
-export type RecordResult = "ok" | "ignored" | "not_found";
+type WebhookTags = NonNullable<ResendWebhookEvent["data"]>["tags"];
 
-export async function recordEmailEvent(event: ResendEvent): Promise<RecordResult> {
-  const name = event.type ? EVENT_NAMES[event.type] : undefined;
+function tagValue(tags: WebhookTags, name: string) {
+  if (!tags) return undefined;
+  if (Array.isArray(tags)) return tags.find((t) => t?.name === name)?.value;
+  return (tags as Record<string, string>)[name];
+}
+
+function parseDate(...values: (string | undefined)[]) {
+  for (const v of values) {
+    if (!v) continue;
+    const d = new Date(v);
+    if (!Number.isNaN(d.getTime())) return d;
+  }
+  return new Date();
+}
+
+/* The event's data without the recipient list or the clicker's IP
+   address and browser, which the Timeline does not show. */
+function trimmedPayload(event: ResendEvent) {
+  const rest: Record<string, unknown> = { ...(event.data || {}) };
+  const click = event.data?.click;
+  delete rest.to;
+  delete rest.from;
+  delete rest.click;
+  return JSON.parse(
+    JSON.stringify({
+      ...rest,
+      ...(click ? { click: { link: click.link, timestamp: click.timestamp } } : {}),
+    }),
+  );
+}
+
+export function eventDedupeKey(event: ResendEvent, webhookId?: string | null) {
+  if (webhookId) return `svix:${webhookId}`.slice(0, 200);
+  const d = event.data || {};
+  return (
+    "hash:" +
+    crypto
+      .createHash("sha256")
+      .update([d.email_id, event.type, event.created_at, d.created_at, d.click?.link, d.click?.timestamp].join("|"))
+      .digest("hex")
+  );
+}
+
+function isUniqueViolation(error: unknown) {
+  return Boolean(error && typeof error === "object" && (error as { code?: string }).code === "P2002");
+}
+
+export async function recordEmailEvent(
+  event: ResendEvent,
+  options: { webhookId?: string | null } = {},
+): Promise<RecordResult> {
+  const type = typeof event.type === "string" ? event.type : "";
   const emailId = event.data?.email_id;
-  if (!name || !emailId) return "ignored";
+  if (!type.startsWith("email.") || type === "email.received" || !emailId) return "ignored";
 
-  const row = await db.discountDelivery.findFirst({
-    where: { providerId: emailId },
-    select: { id: true, shop: true, destination: true, lastEvent: true, lastEventAt: true },
-  });
+  const select = { id: true, shop: true, destination: true, lastEvent: true, lastEventAt: true, providerId: true } as const;
+  let row = await db.discountDelivery.findFirst({ where: { providerId: emailId }, select });
+  if (!row) {
+    const deliveryId = tagValue(event.data?.tags, "delivery_id");
+    if (deliveryId) {
+      row = await db.discountDelivery.findFirst({ where: { id: deliveryId, channel: "email" }, select });
+    }
+  }
   if (!row) return "not_found";
 
-  const parsed = new Date(event.created_at || event.data?.created_at || Date.now());
-  const at = Number.isNaN(parsed.getTime()) ? new Date() : parsed;
+  const at = parseDate(
+    type === "email.clicked" ? event.data?.click?.timestamp : undefined,
+    event.data?.created_at,
+    event.created_at,
+  );
+
+  try {
+    await db.emailEvent.create({
+      data: {
+        shop: row.shop,
+        deliveryId: row.id,
+        providerId: emailId,
+        type: type.slice(0, 100),
+        occurredAt: at,
+        dedupeKey: eventDedupeKey(event, options.webhookId),
+        link: event.data?.click?.link?.slice(0, 2000) || null,
+        bounceType: event.data?.bounce?.type?.slice(0, 100) || null,
+        bounceSubType: event.data?.bounce?.subType?.slice(0, 100) || null,
+        reason: (event.data?.bounce?.message || event.data?.failed?.reason || null)?.slice(0, 1000) ?? null,
+        payload: trimmedPayload(event),
+      },
+    });
+  } catch (error) {
+    if (isUniqueViolation(error)) return "duplicate";
+    throw error;
+  }
+
+  /* The webhook arrived before the send loop saved the id. */
+  if (!row.providerId) {
+    await db.discountDelivery.updateMany({ where: { id: row.id, providerId: null }, data: { providerId: emailId } });
+  }
+
+  const name = LAST_EVENT_NAME[type];
+  if (!name) return "ok";
 
   const data: Record<string, unknown> = {};
 
@@ -289,4 +368,80 @@ export async function retryEmailDelivery(shop: string, id: string) {
 
   kickDeliveries(shop);
   return { ok: true as const };
+}
+
+/* ------------------------------------------------------------
+   ONE EMAIL (its page in Logs)
+
+   The delivery row plus every stored event, always scoped to the
+   shop. When the email went through Resend, the latest status is
+   also checked against Resend (at most once a minute, or right
+   away with `sync: "force"`).
+   ------------------------------------------------------------ */
+
+export async function getEmailDetail(shop: string, id: string, options: { sync?: "auto" | "force" | "off" } = {}) {
+  const find = () => db.discountDelivery.findFirst({ where: { id, shop, channel: "email" } });
+  let row = await find();
+  if (!row) return null;
+
+  let syncError: string | null = null;
+  let apiLastEvent: string | null = null;
+  if (options.sync !== "off") {
+    const result = await syncEmailFromResend(row, { force: options.sync === "force" });
+    syncError = result.error;
+    apiLastEvent = result.apiLastEvent;
+    if (result.synced) row = (await find()) ?? row;
+  }
+
+  const [events, campaign, template] = await Promise.all([
+    db.emailEvent.findMany({
+      where: { shop, deliveryId: row.id },
+      orderBy: { occurredAt: "asc" },
+      take: 500,
+      select: {
+        id: true,
+        providerId: true,
+        type: true,
+        occurredAt: true,
+        link: true,
+        bounceType: true,
+        bounceSubType: true,
+        reason: true,
+      },
+    }),
+    db.campaign.findFirst({ where: { shop, id: row.campaignId }, select: { name: true } }),
+    row.templateId
+      ? db.emailTemplate.findFirst({ where: { shop, id: row.templateId }, select: { name: true } })
+      : null,
+  ]);
+
+  const iso = (d: Date | null) => d?.toISOString() ?? null;
+
+  return {
+    email: {
+      id: row.id,
+      to: row.destination,
+      from: row.fromAddress,
+      subject: row.subject,
+      provider: row.provider,
+      providerId: row.providerId,
+      status: emailStatus(row),
+      lastEvent: row.lastEvent,
+      attempts: row.attempts,
+      error: row.error,
+      campaignName: campaign?.name ?? null,
+      templateName: row.templateId ? template?.name || "Deleted template" : null,
+      createdAt: row.createdAt.toISOString(),
+      sentAt: iso(row.sentAt),
+      deliveredAt: iso(row.deliveredAt),
+      openedAt: iso(row.openedAt),
+      clickedAt: iso(row.clickedAt),
+      bouncedAt: iso(row.bouncedAt),
+      complainedAt: iso(row.complainedAt),
+      lastEventAt: iso(row.lastEventAt),
+    },
+    events: events.map((e) => ({ ...e, occurredAt: e.occurredAt.toISOString() })),
+    apiLastEvent,
+    syncError,
+  };
 }
