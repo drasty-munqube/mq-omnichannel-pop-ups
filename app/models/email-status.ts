@@ -42,16 +42,15 @@ export function emailPath(id: string) {
    browser too. */
 export const EMAIL_PAGE_SIZE = 25;
 
-/* Filter tabs on the Logs page. "bounced" also covers spam
-   reports; "failed" also covers suppressed addresses. */
+/* Filter tabs on the Logs page. "delivered" also covers opened
+   and clicked emails; "failed" also covers bounces, spam reports
+   and suppressed addresses. Each email's Timeline shows exactly
+   what happened. */
 export const EMAIL_FILTERS = [
   { key: "all", label: "All" },
   { key: "queued", label: "Queued" },
   { key: "sent", label: "Sent" },
   { key: "delivered", label: "Delivered" },
-  { key: "opened", label: "Opened" },
-  { key: "clicked", label: "Clicked" },
-  { key: "bounced", label: "Bounced" },
   { key: "failed", label: "Failed" },
 ] as const;
 

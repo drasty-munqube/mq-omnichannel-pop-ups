@@ -260,18 +260,17 @@ function filterWhere(filter: EmailFilterKey) {
       return { status: "pending" };
     case "sent":
       return { status: "sent", OR: [{ lastEvent: null }, { lastEvent: { in: ["sent", "delayed"] } }] };
+    /* Opened and clicked emails were delivered too, so they stay
+       under Delivered now that those tabs are gone. */
     case "delivered":
-    case "opened":
-    case "clicked":
-      return { status: "sent", lastEvent: filter };
-    case "bounced":
-      return { lastEvent: { in: ["bounced", "complained"] } };
+      return { status: "sent", lastEvent: { in: ["delivered", "opened", "clicked"] } };
+    /* Bounces and spam reports count as failed, so they are still
+       one click away without a Bounced tab. */
     case "failed":
       return {
         OR: [
-          { status: "failed", NOT: { lastEvent: { in: ["bounced", "complained"] } } },
-          { status: "failed", lastEvent: null },
-          { lastEvent: { in: ["failed", "suppressed"] } },
+          { status: "failed" },
+          { lastEvent: { in: ["failed", "suppressed", "bounced", "complained"] } },
         ],
       };
     default:
