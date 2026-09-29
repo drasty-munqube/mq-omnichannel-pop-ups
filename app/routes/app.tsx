@@ -10,21 +10,24 @@ import { NavMenu } from "@shopify/app-bridge-react";
 import { AppProvider } from "@shopify/shopify-app-react-router/react";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 
+import { WelcomeTour } from "../components/welcome-tour";
 import { authenticate } from "../shopify.server";
 
 export async function loader({
   request,
 }: LoaderFunctionArgs) {
-  await authenticate.admin(request);
+  const { session } =
+    await authenticate.admin(request);
 
   return {
     apiKey:
       process.env.SHOPIFY_API_KEY || "",
+    shop: session.shop,
   };
 }
 
 export default function App() {
-  const { apiKey } =
+  const { apiKey, shop } =
     useLoaderData<typeof loader>();
 
   return (
@@ -74,6 +77,9 @@ export default function App() {
       </NavMenu>
 
       <Outlet />
+
+      {/* First-time welcome tour, once per browser. */}
+      <WelcomeTour shop={shop} />
     </AppProvider>
   );
 }

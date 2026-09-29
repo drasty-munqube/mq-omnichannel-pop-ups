@@ -26,6 +26,8 @@ import {
   pageTitle,
 } from "../design/styles";
 import { useScrollReveal } from "../design/useScrollReveal";
+import { SetupGuide } from "../components/setup-guide";
+import { buildChecklist, themeEditorUrl } from "../models/onboarding";
 
 /* ============================================================
    LOADER
@@ -52,7 +54,7 @@ export async function loader({
   since.setUTCHours(0, 0, 0, 0);
   since.setUTCDate(since.getUTCDate() - 29);
 
-  const [campaigns, popups, events] =
+  const [campaigns, popups, events, setup] =
     await Promise.all([
       db.campaign.findMany({
         where: { shop: session.shop },
@@ -73,7 +75,28 @@ export async function loader({
         },
         _count: { _all: true },
       }),
+      /* For the setup guide: has the storefront sent anything yet
+         (proof the app embed is on), is a sending domain verified,
+         and has anyone signed up. */
+      Promise.all([
+        db.popupEvent.findFirst({
+          where: { shop: session.shop, source: "shopify" },
+          select: { id: true },
+        }),
+        db.visitor.findFirst({
+          where: { shop: session.shop, source: "shopify" },
+          select: { id: true },
+        }),
+        db.emailDomain.count({
+          where: { shop: session.shop, status: "verified" },
+        }),
+        db.contact.count({
+          where: { shop: session.shop },
+        }),
+      ]),
     ]);
+
+  const [storefrontEvent, storefrontVisitor, verifiedDomainCount, contactCount] = setup;
 
   const eventTotals = emptyCounts();
 
@@ -95,7 +118,26 @@ export async function loader({
       popup.status.toLowerCase() === "active",
   );
 
+  const setupSteps = buildChecklist(
+    {
+      storefrontSeen: Boolean(storefrontEvent || storefrontVisitor),
+      popupCount: popups.length,
+      liveCampaignCount: liveCampaigns.length,
+      verifiedDomainCount,
+      contactCount,
+    },
+    {
+      themeEditorUrl: themeEditorUrl(
+        session.shop,
+        process.env.SHOPIFY_API_KEY || "",
+      ),
+    },
+  );
+
   return {
+    shop: session.shop,
+    setupSteps,
+
     optInRate: formatRate(
       conversionRate(
         eventTotals.view,
@@ -244,6 +286,8 @@ function MetricTile({
 
 export default function Index() {
   const {
+    shop,
+    setupSteps,
     optInRate,
     optInViews,
     campaignCount,
@@ -345,6 +389,12 @@ export default function Index() {
           </div>
         </div>
       </div>
+
+      {/* =====================================================
+          SETUP GUIDE (first-time checklist)
+      ===================================================== */}
+
+      <SetupGuide shop={shop} steps={setupSteps} />
 
       {/* =====================================================
           METRIC TILES

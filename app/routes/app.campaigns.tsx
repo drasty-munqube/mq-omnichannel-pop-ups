@@ -3460,11 +3460,11 @@ export default function Campaigns() {
                       },
                       {
                         title: "New visitors",
-                        text: "Visitors who are new to your store.",
+                        text: "First-time visitors, during their first visit. Good for a welcome offer.",
                       },
                       {
                         title: "Returning visitors",
-                        text: "Visitors who have visited before.",
+                        text: "Visitors who come back after an earlier visit (30+ minutes away).",
                       },
                       {
                         title: "Customers",
