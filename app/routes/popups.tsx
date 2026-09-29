@@ -10,6 +10,8 @@ import {
   saveSubmission,
 } from "../models/popup-widget.server";
 import { ensureShopifySite } from "../models/site.server";
+import { proxyRequestInfo } from "../models/track-endpoint.server";
+import { recordPopupVisitorEvent } from "../models/visitors.server";
 
 /* ============================================================
    SHOPIFY STOREFRONT ENDPOINT (App Proxy)
@@ -111,11 +113,12 @@ export async function action({
 
   if (body && typeof body.type === "string") {
     await recordEvent(shop, "shopify", body);
+    await recordPopupVisitorEvent(shop, "shopify", body, proxyRequestInfo(request));
     return Response.json({ ok: true });
   }
 
   try {
-    await saveSubmission(shop, body, "shopify");
+    await saveSubmission(shop, body, "shopify", proxyRequestInfo(request));
     return Response.json({ ok: true });
   } catch (error) {
     console.error(

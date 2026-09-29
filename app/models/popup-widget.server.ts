@@ -3,6 +3,12 @@ import {
   kickDeliveries,
   queueCouponDelivery,
 } from "./delivery.server";
+import {
+  identifyVisitor,
+  linkShopifyCustomer,
+  resolveContact,
+  type RequestInfo,
+} from "./visitors.server";
 
 /* ============================================================
    SHARED WIDGET DATA ACCESS
@@ -196,6 +202,10 @@ export async function getEligibleCampaigns(
 }
 
 export type SubmissionInput = {
+  /* The visitor's anonymous id from the embed script, when
+     tracking is allowed. Links this signup to their earlier
+     visits. */
+  anonymousId?: string;
   popupId?: string;
   device?: string;
   popupName?: string;
@@ -210,6 +220,7 @@ export async function saveSubmission(
   shop: string,
   body: SubmissionInput,
   source: EventSource = "shopify",
+  info: RequestInfo = {},
 ) {
   const fields = body.fields || {};
 
@@ -220,18 +231,52 @@ export async function saveSubmission(
     ) ||
     null;
 
-  const contact = await db.contact.create({
-    data: {
-      shop,
-      popupId: body.popupId || null,
-      popupName: body.popupName || null,
-      campaignId: body.campaignId || null,
-      email,
-      phone: body.phone || null,
-      fields,
-      pageUrl: body.pageUrl || null,
-    },
+  /* One contact per email (or phone) per shop: a second signup
+     updates the contact it already has instead of adding a row.
+     The coupon queue below keys on the contact, so the same
+     person is not sent a second discount. */
+  const { contact } = await resolveContact(shop, {
+    email,
+    phone: body.phone || null,
+    fields,
+    popupId: body.popupId || null,
+    popupName: body.popupName || null,
+    campaignId: body.campaignId || null,
+    pageUrl: body.pageUrl || null,
   });
+
+  /* Link the anonymous visitor to this contact and hand the
+     contact the visitor's earlier events. Never allowed to fail
+     the signup itself. */
+  if (body.anonymousId) {
+    try {
+      await identifyVisitor(
+        shop,
+        {
+          anonymousId: body.anonymousId,
+          contactId: contact.id,
+          source,
+          campaignId: body.campaignId || null,
+          popupId: body.popupId || null,
+          pageUrl: body.pageUrl || null,
+          device: body.device || null,
+        },
+        info,
+      );
+    } catch (error) {
+      console.error("IDENTIFY VISITOR ERROR:", error);
+    }
+  }
+
+  /* Logged in to the store: remember who they are on the contact,
+     so their other devices and later logged-in visits join it. */
+  if (info.shopifyCustomerId) {
+    try {
+      await linkShopifyCustomer(shop, contact.id, info.shopifyCustomerId);
+    } catch (error) {
+      console.error("LINK SHOPIFY CUSTOMER ERROR:", error);
+    }
+  }
 
   /* The submit event is written here rather than sent by the
      widget, because this is the one moment the server can be

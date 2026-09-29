@@ -127,8 +127,17 @@ model Contact {
   fields     Json
   pageUrl    String?
   createdAt  DateTime @default(now())
+  // The shopper's Shopify customer id, when they were logged in to
+  // the store at signup (from the signed App Proxy request). Their
+  // later logged-in visits on any device link to this contact.
+  shopifyCustomerId String?
 
   @@index([shop, createdAt])
+  // A second signup with the same email reuses the contact, and
+  // visitor tracking looks contacts up by email or phone.
+  @@index([shop, email])
+  @@index([shop, phone])
+  @@index([shop, shopifyCustomerId])
 }
 
 // One row per thing a popup did in a shopper's browser: it was shown,
@@ -346,4 +355,78 @@ model EmailEvent {
 
   @@index([deliveryId, occurredAt])
   @@index([shop])
+}
+
+/* An anonymous visitor on a page where a campaign is live, one row
+   per browser per shop. The embed script makes up a random id
+   (anonymousId, a UUID), keeps it in a first-party cookie and
+   localStorage, and reports it with page views and popup events.
+   No personal data lives here; contactId links the visitor to a
+   Contact once they share an email or phone. Several visitors
+   (devices) can point at the same contact. */
+model Visitor {
+  id           String    @id @default(cuid())
+  shop         String
+  anonymousId  String
+  contactId    String?
+  identifiedAt DateTime?
+
+  firstSeenAt  DateTime  @default(now())
+  lastSeenAt   DateTime  @default(now())
+  // Page views seen for this visitor.
+  visitCount   Int       @default(0)
+
+  firstPageUrl String?
+  lastPageUrl  String?
+  referrer     String?
+  utmSource    String?
+  utmMedium    String?
+  utmCampaign  String?
+  utmTerm      String?
+  utmContent   String?
+
+  // "desktop" | "tablet" | "mobile", from the embed script.
+  device       String?
+  browser      String?
+  os           String?
+  // Two-letter code, only when the hosting platform supplies one.
+  country      String?
+  // "shopify" (theme app embed) or "external" (universal snippet).
+  source       String    @default("external")
+  // Set when the visitor was logged in to the Shopify store.
+  shopifyCustomerId String?
+
+  @@unique([shop, anonymousId])
+  @@index([shop, shopifyCustomerId])
+  @@index([shop, contactId])
+  @@index([shop, lastSeenAt])
+}
+
+/* One thing a visitor did: page_view, popup_shown, popup_closed,
+   popup_submitted, identified. contactId is filled in when the
+   visitor is identified, including for their earlier events, so a
+   contact's journey can be read in one query. eventId comes from
+   the browser (or the server for server-side events) and is
+   unique, so a request sent twice is stored once. */
+model VisitorEvent {
+  id          String   @id @default(cuid())
+  shop        String
+  eventId     String   @unique
+  visitorId   String
+  anonymousId String
+  contactId   String?
+  campaignId  String?
+  popupId     String?
+  type        String
+  pageUrl     String?
+  // When it happened in the browser (clamped by the server).
+  occurredAt  DateTime
+  createdAt   DateTime @default(now())
+  // Small extras, e.g. the previous contact on a re-identify.
+  meta        Json?
+
+  @@index([shop, anonymousId, occurredAt])
+  @@index([shop, contactId, occurredAt])
+  @@index([shop, campaignId, occurredAt])
+  @@index([visitorId, occurredAt])
 }

@@ -1,6 +1,7 @@
 import type { ActionFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
+import { eraseShopVisitorsOps } from "../models/visitors.server";
 
 /* ============================================================
    MANDATORY GDPR WEBHOOK — shop/redact
@@ -24,6 +25,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     db.popup.deleteMany({ where: { shop } }),
     db.site.deleteMany({ where: { shop } }),
     db.popupEvent.deleteMany({ where: { shop } }),
+    ...eraseShopVisitorsOps(shop),
   ]);
 
   return new Response();

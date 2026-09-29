@@ -6,7 +6,9 @@ import { useLoaderData } from "react-router";
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
 import { AUDIT_GRID, AUDIT_HEADERS } from "../models/audit-format";
-import { AuditCells } from "../components/audit-cells";
+import { AuditCells, stickyEnd } from "../components/audit-cells";
+import { ContactJourneyDialog } from "../components/contact-journey";
+import { RowActions } from "../components/row-actions";
 import { kickDeliveries } from "../models/delivery.server";
 
 /* ============================================================
@@ -198,6 +200,9 @@ export default function Contacts() {
   const [exporting, setExporting] =
     useState(false);
 
+  /* The contact whose journey dialog is open. */
+  const [journeyFor, setJourneyFor] = useState<{ id: string; title: string } | null>(null);
+
   /* Fetched and turned into a blob rather than linked to
      directly. This screen runs inside Shopify's admin iframe,
      where a plain download link is unreliable, and App Bridge
@@ -280,7 +285,8 @@ export default function Contacts() {
               }}
             >
               Shoppers who submitted a popup on your
-              storefront.
+              storefront. One row per email; open ⋮ to see a
+              contact&apos;s journey.
               {total > contacts.length
                 ? ` Showing the latest ${contacts.length}; Export CSV gives you all ${total}.`
                 : ""}
@@ -373,12 +379,12 @@ export default function Contacts() {
           ) : (
 
             <div style={{ overflowX: "auto" }}>
-            <div style={{ minWidth: "900px" }}>
+            <div style={{ minWidth: "960px" }}>
               <div
                 style={{
                   display: "grid",
                   gridTemplateColumns:
-                    `minmax(180px, 1.4fr) minmax(110px, 1fr) minmax(130px, 1fr) ${AUDIT_GRID}`,
+                    `minmax(180px, 1.4fr) minmax(110px, 1fr) minmax(130px, 1fr) ${AUDIT_GRID} 56px`,
                   gap: "12px",
                   padding: "11px 18px",
                   background: "#F8F9FA",
@@ -397,6 +403,7 @@ export default function Contacts() {
                 {AUDIT_HEADERS.map((h) => (
                   <div key={h}>{h}</div>
                 ))}
+                <div style={stickyEnd("#F8F9FA")}>Actions</div>
               </div>
 
               {contacts.map((contact) => (
@@ -405,7 +412,7 @@ export default function Contacts() {
                   style={{
                     display: "grid",
                     gridTemplateColumns:
-                      `minmax(180px, 1.4fr) minmax(110px, 1fr) minmax(130px, 1fr) ${AUDIT_GRID}`,
+                      `minmax(180px, 1.4fr) minmax(110px, 1fr) minmax(130px, 1fr) ${AUDIT_GRID} 56px`,
                     gap: "12px",
                     alignItems: "center",
                     padding: "14px 18px",
@@ -492,6 +499,22 @@ export default function Contacts() {
                     createdAt={contact.createdAt}
                     updatedAt={null}
                   />
+
+                  <div style={stickyEnd("#FFFFFF")}>
+                    <RowActions
+                      name={contact.email || contact.phone || "contact"}
+                      actions={[
+                        {
+                          label: "View journey",
+                          onSelect: () =>
+                            setJourneyFor({
+                              id: contact.id,
+                              title: contact.email || contact.phone || "Contact",
+                            }),
+                        },
+                      ]}
+                    />
+                  </div>
                 </div>
               ))}
             </div>
@@ -502,6 +525,14 @@ export default function Contacts() {
         </div>
 
       </s-section>
+
+      {journeyFor ? (
+        <ContactJourneyDialog
+          contactId={journeyFor.id}
+          title={journeyFor.title}
+          onClose={() => setJourneyFor(null)}
+        />
+      ) : null}
 
     </s-page>
   );

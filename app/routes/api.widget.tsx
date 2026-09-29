@@ -10,6 +10,8 @@ import {
   saveSubmission,
 } from "../models/popup-widget.server";
 import { touchSite } from "../models/site.server";
+import { requestInfo } from "../models/track-endpoint.server";
+import { recordPopupVisitorEvent } from "../models/visitors.server";
 
 /* ============================================================
    PUBLIC CROSS-SITE WIDGET ENDPOINT
@@ -114,6 +116,7 @@ export async function action({
 
   let body: {
     shop?: string;
+    anonymousId?: string;
     type?: string;
     device?: string;
     popupId?: string;
@@ -151,11 +154,14 @@ export async function action({
 
   if (typeof body.type === "string") {
     await recordEvent(shop, "external", body);
+    /* Same request, also added to the visitor's history when the
+       widget sent its anonymous id. */
+    await recordPopupVisitorEvent(shop, "external", body, requestInfo(request));
     return json({ ok: true });
   }
 
   try {
-    await saveSubmission(shop, body, "external");
+    await saveSubmission(shop, body, "external", requestInfo(request));
     return json({ ok: true });
   } catch (error) {
     console.error(

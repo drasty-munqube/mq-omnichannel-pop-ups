@@ -113,15 +113,43 @@
     }
   }
 
-  /* Read ONCE, before markVisited() runs. Reading it later would
+  /* ----------------------------------------------------------
+     NEW OR RETURNING VISITOR
+
+     A visit is a run of page views with no gap longer than 30
+     minutes, the usual analytics definition. A visitor counts as
+     new for their whole first visit, so a first-visit (welcome)
+     popup can still show on the second or third page they open,
+     and as returning from their next visit on. Browsers that only
+     have the older "seen" flag count as returning. Kept identical
+     to the theme embed (mq-popup.js).
+
+     Read ONCE, before markVisited() runs. Reading it later would
      always say "returning", because boot marks this visit as
-     seen — which silently made "New visitors" targeting match
-     nobody at all. */
-  var wasReturningVisitor =
-    safeGet(STORAGE_PREFIX + "seen") === "1";
+     seen, which silently made "New visitors" targeting match
+     nobody at all.
+     ---------------------------------------------------------- */
+
+  var VISIT_GAP_MS = 30 * 60 * 1000;
+
+  var wasReturningVisitor = (function () {
+    if (safeGet(STORAGE_PREFIX + "seen") !== "1") {
+      return false;
+    }
+
+    var lastActive = Number(safeGet(STORAGE_PREFIX + "last_active") || 0);
+    var inFirstVisit =
+      safeGet(STORAGE_PREFIX + "first_visit") === "1" &&
+      lastActive > 0 &&
+      Date.now() - lastActive < VISIT_GAP_MS;
+
+    return !inFirstVisit;
+  })();
 
   function markVisited() {
     safeSet(STORAGE_PREFIX + "seen", "1");
+    safeSet(STORAGE_PREFIX + "first_visit", wasReturningVisitor ? "0" : "1");
+    safeSet(STORAGE_PREFIX + "last_active", String(Date.now()));
   }
 
   /* The popup's own Logic tab can also narrow new-vs-returning.
@@ -649,6 +677,302 @@
     return text;
   }
 
+  /* Where visitor events go, and whether to wait for consent.
+     data-consent="required" on the script tag keeps tracking off
+     until the site calls MQPopups.grantConsent() (for example from
+     its cookie banner). Without it, tracking is on. */
+  var TRACK_URL = apiOrigin + "/api/track";
+  var CONSENT_MODE =
+    thisScript.getAttribute("data-consent") === "required"
+      ? "required"
+      : "auto";
+  var TRACKING_OFF = false;
+
+  /* ------------------------------------------------------------
+     ANONYMOUS VISITOR
+
+     Every visitor to a page with a live campaign gets a random id
+     (a UUID made in this browser), kept in a first-party cookie
+     (mq_aid) with localStorage as a backup, so the same person is
+     recognised on later visits. Nothing else is stored in either:
+     no email, no name, nothing personal.
+
+     The id travels with page views, popup shown / closed events
+     and the signup itself. When the visitor submits their email,
+     the server links this id to their contact and gives the
+     contact the whole journey so far.
+
+     Consent: tracking starts only once it is allowed. See
+     CONSENT_MODE above; MQPopups.grantConsent() and
+     MQPopups.revokeConsent() let a site's own cookie banner turn
+     it on and off. Popups keep working either way.
+
+     Events are queued and sent in small batches with sendBeacon
+     (as text/plain, so no CORS preflight), never awaited, so the
+     page and the popup are never slowed down by them.
+  ------------------------------------------------------------ */
+
+  var AID_NAME = "mq_aid";
+  var CONSENT_KEY = "mq_consent";
+  var AID_RE =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+  var ONE_YEAR = 60 * 60 * 24 * 365;
+
+  function makeUuid() {
+    try {
+      if (window.crypto && window.crypto.randomUUID) {
+        return window.crypto.randomUUID();
+      }
+    } catch (error) {
+      /* fall back below */
+    }
+
+    var bytes = new Uint8Array(16);
+    try {
+      window.crypto.getRandomValues(bytes);
+    } catch (error) {
+      for (var r = 0; r < 16; r += 1) {
+        bytes[r] = Math.floor(Math.random() * 256);
+      }
+    }
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+
+    var hex = [];
+    for (var h = 0; h < 16; h += 1) {
+      hex.push((bytes[h] + 0x100).toString(16).slice(1));
+    }
+    return (
+      hex.slice(0, 4).join("") + "-" +
+      hex.slice(4, 6).join("") + "-" +
+      hex.slice(6, 8).join("") + "-" +
+      hex.slice(8, 10).join("") + "-" +
+      hex.slice(10, 16).join("")
+    );
+  }
+
+  function readCookie(name) {
+    try {
+      var match = document.cookie.match(
+        new RegExp("(?:^|; )" + name + "=([^;]*)"),
+      );
+      return match ? decodeURIComponent(match[1]) : null;
+    } catch (error) {
+      return null;
+    }
+  }
+
+  function writeCookie(name, value, maxAge) {
+    try {
+      document.cookie =
+        name + "=" + encodeURIComponent(value) +
+        "; Max-Age=" + maxAge +
+        "; Path=/; SameSite=Lax" +
+        (window.location.protocol === "https:" ? "; Secure" : "");
+    } catch (error) {
+      /* cookies blocked: localStorage still works */
+    }
+  }
+
+  function storeGet(key) {
+    try {
+      return window.localStorage.getItem(key);
+    } catch (error) {
+      return null;
+    }
+  }
+
+  function storeSet(key, value) {
+    try {
+      window.localStorage.setItem(key, value);
+    } catch (error) {
+      /* storage blocked */
+    }
+  }
+
+  function storeRemove(key) {
+    try {
+      window.localStorage.removeItem(key);
+    } catch (error) {
+      /* storage blocked */
+    }
+  }
+
+  /* "granted" | "pending" | "denied" */
+  var consentState =
+    CONSENT_MODE === "required"
+      ? storeGet(CONSENT_KEY) === "granted"
+        ? "granted"
+        : "pending"
+      : CONSENT_MODE === "shopify"
+        ? "pending"
+        : "granted";
+
+  var anonymousId = null;
+
+  /* The visitor's id, created on first use. Null while tracking is
+     not allowed, so nothing is written before consent. */
+  function currentVisitorId() {
+    if (TRACKING_OFF || consentState !== "granted") {
+      return null;
+    }
+    if (anonymousId) {
+      return anonymousId;
+    }
+
+    var id = readCookie(AID_NAME);
+    if (!id || !AID_RE.test(id)) {
+      id = storeGet(AID_NAME);
+    }
+    if (!id || !AID_RE.test(id)) {
+      id = makeUuid();
+    }
+
+    /* Written back every time, which also refreshes the cookie's
+       one-year lifetime and restores it from the backup. */
+    writeCookie(AID_NAME, id, ONE_YEAR);
+    storeSet(AID_NAME, id);
+    anonymousId = id;
+    return id;
+  }
+
+  var trackQueue = [];
+  var trackTimer = null;
+
+  function sendTrackBody(body) {
+    try {
+      if (navigator.sendBeacon) {
+        var blob = new Blob([body], { type: "text/plain" });
+        if (navigator.sendBeacon(TRACK_URL, blob)) {
+          return;
+        }
+      }
+    } catch (error) {
+      /* fall through to fetch */
+    }
+
+    try {
+      fetch(TRACK_URL, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain" },
+        body: body,
+        keepalive: true,
+      }).catch(function () {});
+    } catch (error) {
+      /* tracking is never worth an error on someone's page */
+    }
+  }
+
+  function flushTrack() {
+    if (trackTimer) {
+      window.clearTimeout(trackTimer);
+      trackTimer = null;
+    }
+    if (!trackQueue.length) {
+      return;
+    }
+
+    var id = currentVisitorId();
+    if (!id) {
+      return;
+    }
+
+    var batch = trackQueue.splice(0, 20);
+    var body;
+
+    try {
+      body = JSON.stringify({
+        shop: shop,
+        anonymousId: id,
+        context: {
+          pageUrl: window.location.href,
+          referrer: document.referrer || "",
+          device: currentDevice(),
+        },
+        events: batch,
+      });
+    } catch (error) {
+      return;
+    }
+
+    sendTrackBody(body);
+
+    if (trackQueue.length) {
+      scheduleTrack();
+    }
+  }
+
+  function scheduleTrack() {
+    if (trackTimer || consentState !== "granted") {
+      return;
+    }
+    trackTimer = window.setTimeout(flushTrack, 1000);
+  }
+
+  function trackVisitorEvent(type, campaign) {
+    if (TRACKING_OFF || consentState === "denied") {
+      return;
+    }
+
+    trackQueue.push({
+      eventId: makeUuid(),
+      type: type,
+      campaignId: campaign ? campaign.campaignId : undefined,
+      popupId: campaign ? campaign.popupId : undefined,
+      pageUrl: window.location.href,
+      occurredAt: new Date().toISOString(),
+    });
+
+    /* Held while consent is still being decided, but never more
+       than a handful. */
+    if (trackQueue.length > 40) {
+      trackQueue.shift();
+    }
+
+    scheduleTrack();
+  }
+
+  function setConsent(state) {
+    consentState = state;
+
+    if (state === "granted") {
+      if (CONSENT_MODE === "required") {
+        storeSet(CONSENT_KEY, "granted");
+      }
+      flushTrack();
+      return;
+    }
+
+    /* Withdrawn: forget the id and anything not yet sent. */
+    trackQueue = [];
+    anonymousId = null;
+    writeCookie(AID_NAME, "", 0);
+    storeRemove(AID_NAME);
+    storeRemove(CONSENT_KEY);
+  }
+
+  try {
+    document.addEventListener("visibilitychange", function () {
+      if (document.visibilityState === "hidden") {
+        flushTrack();
+      }
+    });
+    window.addEventListener("pagehide", flushTrack);
+  } catch (error) {
+    /* nothing to flush on */
+  }
+
+  window.MQPopups = window.MQPopups || {};
+  window.MQPopups.grantConsent = function () {
+    setConsent("granted");
+  };
+  window.MQPopups.revokeConsent = function () {
+    setConsent("denied");
+  };
+  window.MQPopups.getAnonymousId = function () {
+    return currentVisitorId();
+  };
+
   /* ------------------------------------------------------------
      EVENTS
 
@@ -671,6 +995,7 @@
     try {
       body = JSON.stringify({
         shop: shop,
+        anonymousId: currentVisitorId() || undefined,
         type: type,
         campaignId: campaign.campaignId,
         popupId: campaign.popupId,
@@ -681,10 +1006,16 @@
       return;
     }
 
+    /* Sent as text/plain: this script runs on other people's
+       websites, so the request is cross-site, and a JSON content
+       type would need a CORS preflight that a beacon cannot make.
+       Browsers then drop the beacon silently, which is how views
+       and dismissals from other websites went missing. The server
+       parses the body as JSON either way. */
     try {
       if (navigator.sendBeacon) {
         var blob = new Blob([body], {
-          type: "application/json",
+          type: "text/plain",
         });
 
         if (navigator.sendBeacon(apiUrl, blob)) {
@@ -699,7 +1030,7 @@
       fetch(apiUrl, {
         method: "POST",
         headers: {
-          "Content-Type": "application/json",
+          "Content-Type": "text/plain",
         },
         body: body,
         keepalive: true,
@@ -838,6 +1169,7 @@
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         shop: shop,
+        anonymousId: currentVisitorId() || undefined,
         popupId: campaign.popupId,
         popupName: campaign.popupName,
         campaignId: campaign.campaignId,
@@ -1414,8 +1746,17 @@
 
     if (campaign) {
       activeWidget = buildWidget(campaign);
+
+      /* One page view per page load, and only on pages where a
+         campaign is actually live. */
+      if (!pageViewTracked) {
+        pageViewTracked = true;
+        trackVisitorEvent("page_view", campaign);
+      }
     }
   }
+
+  var pageViewTracked = false;
 
   function watchViewport() {
     var pending = null;
