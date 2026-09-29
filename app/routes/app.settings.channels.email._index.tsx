@@ -340,6 +340,7 @@ export default function EmailDomainsPage() {
           >
             {reloading ? "Syncing…" : "Refresh"}
           </button>
+          {/* Import from Resend is hidden for now. Uncomment to bring it back.
           <button
             type="button"
             style={button("secondary", "md", { disabled: !configured })}
@@ -348,6 +349,7 @@ export default function EmailDomainsPage() {
           >
             Import from Resend{importable.length ? ` (${importable.length})` : ""}
           </button>
+          */}
           {configured ? (
             <Link to={`${EMAIL_CHANNEL_PATH}/new`} style={{ ...button("primary", "md"), textDecoration: "none" }}>
               Add domain
@@ -462,11 +464,13 @@ export default function EmailDomainsPage() {
                   Add domain
                 </Link>
               ) : null}
+              {/* Import from Resend is hidden for now. Uncomment to bring it back.
               {configured && importable.length > 0 ? (
                 <button type="button" style={button("secondary", "md")} onClick={() => setImporting(true)}>
                   Import from Resend ({importable.length})
                 </button>
               ) : null}
+              */}
             </div>
           </div>
         )
