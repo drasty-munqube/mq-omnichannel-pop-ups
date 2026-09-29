@@ -8,7 +8,9 @@ import {
   isDomainRegion,
   normalizeDomainInput,
   recordGroup,
+  resendStatusMeta,
   statusMeta,
+  verificationState,
 } from "./email-domain";
 
 describe("normalizeDomainInput", () => {
@@ -51,7 +53,18 @@ describe("status meta", () => {
   });
 
   it("falls back for an unknown status", () => {
-    expect(statusMeta("brand_new_state")).toMatchObject({ label: "brand new state", tone: "neutral" });
+    expect(resendStatusMeta("brand_new_state")).toMatchObject({ label: "brand new state", tone: "neutral" });
+    expect(statusMeta("brand_new_state")).toMatchObject({ label: "Unverified" });
+  });
+
+  it("shows merchants only Verified or Unverified, keeping Resend's help line", () => {
+    expect(statusMeta("verified")).toMatchObject({ label: "Verified", tone: "success" });
+    for (const s of ["failed", "partially_failed", "pending", "not_started", "temporary_failure", "partially_verified"]) {
+      expect(statusMeta(s).label).toBe("Unverified");
+      expect(verificationState(s)).toBe("unverified");
+      expect(statusMeta(s).help).toBe(DOMAIN_STATUS[s as keyof typeof DOMAIN_STATUS].help);
+    }
+    for (const s of DOMAIN_STATUSES) expect(DOMAIN_STATUS[s].help).not.toMatch(/marked Failed/);
   });
 
   it("only polls while pending", () => {

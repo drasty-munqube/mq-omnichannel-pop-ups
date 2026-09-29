@@ -45,7 +45,7 @@ import { RowActions } from "../components/row-actions";
 import { button, input, modalOverlay, modalPanel, skeleton, tableHead, tableRow } from "../design/styles";
 import { color, fontWeight, radius, space, text, zIndex } from "../design/tokens";
 import { actorName } from "../models/actor.server";
-import { DOMAIN_REGIONS, DOMAIN_STATUSES, DOMAIN_STATUS, regionLabel } from "../models/email-domain";
+import { DOMAIN_REGIONS, VERIFICATION_FILTERS, regionLabel, verificationState } from "../models/email-domain";
 import {
   deleteShopDomain,
   deleteShopDomains,
@@ -273,7 +273,7 @@ export default function EmailDomainsPage() {
     const needle = q.trim().toLowerCase();
     return domains.filter(
       (d) =>
-        (status === "all" || d.status === status) &&
+        (status === "all" || verificationState(d.status) === status) &&
         (region === "all" || d.region === region) &&
         (!needle || d.name.toLowerCase().includes(needle)),
     );
@@ -407,9 +407,9 @@ export default function EmailDomainsPage() {
           />
           <select aria-label="Filter by status" value={status} onChange={(e) => setStatus(e.target.value)} style={selectStyle()}>
             <option value="all">All statuses</option>
-            {DOMAIN_STATUSES.map((s) => (
-              <option key={s} value={s}>
-                {DOMAIN_STATUS[s].label}
+            {VERIFICATION_FILTERS.map((f) => (
+              <option key={f.value} value={f.value}>
+                {f.label}
               </option>
             ))}
           </select>

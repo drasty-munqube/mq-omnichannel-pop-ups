@@ -98,13 +98,13 @@ export const DOMAIN_STATUS: Record<DomainStatus, StatusMeta> = {
     label: "Partially failed",
     tone: "accent",
     dot: "#C2410C",
-    help: "Some records could not be found. Check the records marked Failed below against your DNS provider, fix them, then verify again.",
+    help: "Some records could not be found. Check the records below that are not verified against your DNS provider, fix them, then verify again.",
   },
   failed: {
     label: "Failed",
     tone: "danger",
     dot: "#C53030",
-    help: "Resend could not find the records within 72 hours. Check that each record below matches exactly, then press Verify DNS records to try again.",
+    help: "Resend could not find the records within 72 hours. Check that each record below matches exactly, then press Verify DNS records to check again.",
   },
   temporary_failure: {
     label: "Temporary failure",
@@ -115,11 +115,40 @@ export const DOMAIN_STATUS: Record<DomainStatus, StatusMeta> = {
 };
 
 /* Unknown values from a newer API version fall back to a neutral
-   badge instead of breaking the page. */
-export function statusMeta(status: string): StatusMeta {
+   badge instead of breaking the page. This is Resend's own status,
+   kept for the help text; merchants see displayStatus() below. */
+export function resendStatusMeta(status: string): StatusMeta {
   return isDomainStatus(status)
     ? DOMAIN_STATUS[status]
     : { label: status.replace(/_/g, " "), tone: "neutral", dot: "#9AA3B2", help: "" };
+}
+
+/* ------------------------------------------------------------
+   WHAT MERCHANTS SEE
+
+   Only two states on the page: Verified, or Unverified for
+   everything else (not started, pending, partly done, not found,
+   temporarily missing). The help line still explains the real
+   reason and what to do next.
+------------------------------------------------------------ */
+
+export const VERIFICATION_FILTERS = [
+  { value: "verified", label: "Verified" },
+  { value: "unverified", label: "Unverified" },
+] as const;
+
+export type VerificationState = (typeof VERIFICATION_FILTERS)[number]["value"];
+
+export function verificationState(status: string): VerificationState {
+  return status === "verified" ? "verified" : "unverified";
+}
+
+const VERIFIED_META = { label: "Verified", tone: "success" as BadgeTone, dot: "#2F9E6A" };
+const UNVERIFIED_META = { label: "Unverified", tone: "warning" as BadgeTone, dot: "#D69E2E" };
+
+export function statusMeta(status: string): StatusMeta {
+  const look = verificationState(status) === "verified" ? VERIFIED_META : UNVERIFIED_META;
+  return { ...look, help: resendStatusMeta(status).help };
 }
 
 /* Statuses where Resend is still working, so the detail page
