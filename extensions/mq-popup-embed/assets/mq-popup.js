@@ -114,6 +114,76 @@
   }
 
   /* ----------------------------------------------------------
+     TEST LINKS FOR MERCHANTS
+
+     This browser remembers each campaign: how often it was seen,
+     that the shopper signed up, that they closed it. That is what
+     keeps a popup from nagging real shoppers, and it is also why
+     a merchant who tested their own popup once stops seeing it.
+     Three links on any storefront page help:
+
+       ?mq_campaign=<id>  Preview: show that campaign right away,
+                          skipping every rule. Nothing is
+                          remembered and nothing is counted.
+       ?mq_reset=1        Forget what this browser remembers about
+                          campaigns, then run normally.
+       ?mq_debug=1        Log to the console why each campaign was
+                          or was not shown.
+     ---------------------------------------------------------- */
+
+  function urlParam(name) {
+    try {
+      return new URL(window.location.href).searchParams.get(name);
+    } catch (error) {
+      return null;
+    }
+  }
+
+  var previewCampaignId = urlParam("mq_campaign");
+  var debugMode = urlParam("mq_debug") === "1";
+
+  function debugLog(message) {
+    if (debugMode && window.console) {
+      window.console.info("[MQ Popups] " + message);
+    }
+  }
+
+  if (urlParam("mq_reset") === "1") {
+    try {
+      var memoryKeys = [];
+      for (var mk = 0; mk < window.localStorage.length; mk += 1) {
+        var memoryKey = window.localStorage.key(mk);
+        if (
+          /^mq_(views|collected|dismissed)_/.test(memoryKey) ||
+          memoryKey === "mq_seen" ||
+          memoryKey === "mq_first_visit" ||
+          memoryKey === "mq_last_active"
+        ) {
+          memoryKeys.push(memoryKey);
+        }
+      }
+      for (var rk = 0; rk < memoryKeys.length; rk += 1) {
+        window.localStorage.removeItem(memoryKeys[rk]);
+      }
+      if (window.console) {
+        window.console.info(
+          "[MQ Popups] This browser's popup memory was reset (" +
+            memoryKeys.length +
+            " items).",
+        );
+      }
+    } catch (error) {
+      /* storage blocked: nothing to reset */
+    }
+  }
+
+  /* Nothing is written or counted in the theme editor or in a
+     preview, so testing never changes what real visits see. */
+  function memoryOff() {
+    return inThemeEditor() || Boolean(previewCampaignId);
+  }
+
+  /* ----------------------------------------------------------
      NEW OR RETURNING VISITOR
 
      A visit is a run of page views with no gap longer than 30
@@ -172,7 +242,7 @@
      ------------------------------------------------------------ */
 
   function markVisited() {
-    if (inThemeEditor()) {
+    if (memoryOff()) {
       return;
     }
 
@@ -433,7 +503,7 @@
   }
 
   function markViewed(campaignId) {
-    if (inThemeEditor()) {
+    if (memoryOff()) {
       return;
     }
 
@@ -487,6 +557,12 @@
   }
 
   function collectedBlocks(campaign) {
+    /* "No limit" means no conditions at all: the popup shows every
+       time, whether or not this browser signed up or closed it. */
+    if (campaign.frequencyMode === "unlimited") {
+      return false;
+    }
+
     return blockedSince(
       "mq_collected_" + campaign.campaignId,
       Number(campaign.reshowCollectedDays) || 0,
@@ -494,7 +570,7 @@
   }
 
   function markCollected(campaignId) {
-    if (inThemeEditor()) {
+    if (memoryOff()) {
       return;
     }
 
@@ -505,6 +581,12 @@
   }
 
   function dismissedBlocks(campaign) {
+    /* "No limit" means no conditions at all: the popup shows every
+       time, whether or not this browser signed up or closed it. */
+    if (campaign.frequencyMode === "unlimited") {
+      return false;
+    }
+
     return blockedSince(
       "mq_dismissed_" + campaign.campaignId,
       Number(campaign.reshowDismissedDays) || 0,
@@ -512,7 +594,7 @@
   }
 
   function markDismissed(campaignId) {
-    if (inThemeEditor()) {
+    if (memoryOff()) {
       return;
     }
 
@@ -721,7 +803,7 @@
   var TRACK_URL =
     proxyPath + "/popups/track?shop=" + encodeURIComponent(shop);
   var CONSENT_MODE = "shopify";
-  var TRACKING_OFF = inThemeEditor();
+  var TRACKING_OFF = memoryOff();
 
   /* ------------------------------------------------------------
      ANONYMOUS VISITOR
@@ -1104,7 +1186,7 @@
     encodeURIComponent(shop);
 
   function sendEvent(campaign, type) {
-    if (inThemeEditor()) {
+    if (memoryOff()) {
       return;
     }
 
@@ -1324,7 +1406,7 @@
        is still counted. Only the visible label is kept, never
        what was typed into a field. */
     function trackPopupClick(event) {
-      if (inThemeEditor()) {
+      if (memoryOff()) {
         return;
       }
 
@@ -1804,7 +1886,10 @@
       }
     }
 
-    if (campaign.trigger === "Exit intent") {
+    if (previewCampaignId) {
+      /* Preview: no waiting for the trigger. */
+      showTeaser();
+    } else if (campaign.trigger === "Exit intent") {
       cancelExitIntent = onExitIntent(showTeaser);
     } else if (campaign.trigger === "After delay") {
       delayTimer = window.setTimeout(
@@ -1875,39 +1960,46 @@
       i += 1
     ) {
       var campaign = loadedCampaigns[i];
-
-      if (!matchesPageTargets(campaign)) {
-        continue;
-      }
-
-      if (!matchesDevices(campaign)) {
-        continue;
-      }
-
-      if (!matchesCampaignAudience(campaign)) {
-        continue;
-      }
-
-      if (!withinFrequencyCap(campaign)) {
-        continue;
-      }
-
-      if (collectedBlocks(campaign)) {
-        continue;
-      }
-
-      if (dismissedBlocks(campaign)) {
-        continue;
-      }
-
       var settings = popupSettingsFor(
         campaign.steps,
       );
 
-      if (!matchesAudience(settings)) {
+      /* The first rule that says no, in the order they are
+         checked. Named so ?mq_debug=1 can say why. */
+      var reason = !matchesPageTargets(campaign)
+        ? "this page is not one of its target pages"
+        : !matchesDevices(campaign)
+          ? "it is not set to show on " + currentDevice()
+          : !matchesCampaignAudience(campaign)
+            ? "this visitor is not in its audience (" + (campaign.audience || "All visitors") + ")"
+            : !withinFrequencyCap(campaign)
+              ? "this browser already saw it the maximum number of times"
+              : collectedBlocks(campaign)
+                ? "this browser already signed up (After they submit: " +
+                  (Number(campaign.reshowCollectedDays) > 0
+                    ? campaign.reshowCollectedDays + " days)"
+                    : "never show again)")
+                : dismissedBlocks(campaign)
+                  ? "this browser closed it (After they close it: " +
+                    (Number(campaign.reshowDismissedDays) > 0
+                      ? campaign.reshowDismissedDays + " days)"
+                      : "never show again)")
+                  : !matchesAudience(settings)
+                    ? "the popup's own new / returning visitor setting excludes this visitor"
+                    : null;
+
+      if (reason) {
+        debugLog('Skipped "' + (campaign.popupName || campaign.campaignId) + '": ' + reason + ".");
         continue;
       }
 
+      debugLog(
+        'Showing "' +
+          (campaign.popupName || campaign.campaignId) +
+          '" (trigger: ' +
+          (campaign.trigger || "Immediately") +
+          ").",
+      );
       return campaign;
     }
 
@@ -1998,6 +2090,25 @@
     .then(function (data) {
       loadedCampaigns = data.campaigns || [];
       lastDevice = currentDevice();
+
+      debugLog(loadedCampaigns.length + " live campaign(s) for this store.");
+
+      if (previewCampaignId) {
+        for (var f = 0; f < loadedCampaigns.length; f += 1) {
+          if (loadedCampaigns[f].campaignId === previewCampaignId) {
+            activeWidget = buildWidget(loadedCampaigns[f]);
+            return;
+          }
+        }
+        if (window.console) {
+          window.console.warn(
+            "[MQ Popups] mq_campaign=" +
+              previewCampaignId +
+              " is not a live campaign for this store.",
+          );
+        }
+        return;
+      }
 
       applySelection();
       watchViewport();

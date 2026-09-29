@@ -114,6 +114,64 @@
   }
 
   /* ----------------------------------------------------------
+     TEST LINKS (same as the Shopify theme embed)
+
+       ?mq_campaign=<id>  preview that campaign (see BOOT below)
+       ?mq_reset=1        forget what this browser remembers about
+                          campaigns, then run normally
+       ?mq_debug=1        log why each campaign was or was not shown
+     ---------------------------------------------------------- */
+
+  function urlParam(name) {
+    try {
+      return new URL(window.location.href).searchParams.get(name);
+    } catch (error) {
+      return null;
+    }
+  }
+
+  var debugMode = urlParam("mq_debug") === "1";
+
+  function debugLog(message) {
+    if (debugMode && window.console) {
+      window.console.info("[MQ Popups] " + message);
+    }
+  }
+
+  if (urlParam("mq_reset") === "1") {
+    try {
+      var memoryKeys = [];
+      for (var mk = 0; mk < window.localStorage.length; mk += 1) {
+        var memoryKey = window.localStorage.key(mk);
+        if (
+          memoryKey.indexOf(STORAGE_PREFIX) === 0 &&
+          /^(views|collected|dismissed)_|^(seen|first_visit|last_active)$/.test(
+            memoryKey.slice(STORAGE_PREFIX.length),
+          )
+        ) {
+          memoryKeys.push(memoryKey);
+        }
+      }
+      for (var rk = 0; rk < memoryKeys.length; rk += 1) {
+        window.localStorage.removeItem(memoryKeys[rk]);
+      }
+      if (window.console) {
+        window.console.info(
+          "[MQ Popups] This browser's popup memory was reset (" +
+            memoryKeys.length +
+            " items).",
+        );
+      }
+    } catch (error) {
+      /* storage blocked: nothing to reset */
+    }
+  }
+
+  /* A preview never writes what this browser remembers, so
+     testing does not change what the next real visit sees. */
+  var previewing = Boolean(urlParam("mq_campaign"));
+
+  /* ----------------------------------------------------------
      NEW OR RETURNING VISITOR
 
      A visit is a run of page views with no gap longer than 30
@@ -147,6 +205,9 @@
   })();
 
   function markVisited() {
+    if (previewing) {
+      return;
+    }
     safeSet(STORAGE_PREFIX + "seen", "1");
     safeSet(STORAGE_PREFIX + "first_visit", wasReturningVisitor ? "0" : "1");
     safeSet(STORAGE_PREFIX + "last_active", String(Date.now()));
@@ -412,6 +473,9 @@
   }
 
   function markViewed(campaignId) {
+    if (previewing) {
+      return;
+    }
     safeSet(
       STORAGE_PREFIX + "views_" + campaignId,
       String(viewCount(campaignId) + 1),
@@ -467,6 +531,12 @@
   }
 
   function collectedBlocks(campaign) {
+    /* "No limit" means no conditions at all: the popup shows every
+       time, whether or not this browser signed up or closed it. */
+    if (campaign.frequencyMode === "unlimited") {
+      return false;
+    }
+
     return blockedSince(
       STORAGE_PREFIX +
         "collected_" +
@@ -476,6 +546,9 @@
   }
 
   function markCollected(campaignId) {
+    if (previewing) {
+      return;
+    }
     safeSet(
       STORAGE_PREFIX + "collected_" + campaignId,
       String(Date.now()),
@@ -483,6 +556,12 @@
   }
 
   function dismissedBlocks(campaign) {
+    /* "No limit" means no conditions at all: the popup shows every
+       time, whether or not this browser signed up or closed it. */
+    if (campaign.frequencyMode === "unlimited") {
+      return false;
+    }
+
     return blockedSince(
       STORAGE_PREFIX +
         "dismissed_" +
@@ -492,6 +571,9 @@
   }
 
   function markDismissed(campaignId) {
+    if (previewing) {
+      return;
+    }
     safeSet(
       STORAGE_PREFIX + "dismissed_" + campaignId,
       String(Date.now()),
@@ -1782,38 +1864,46 @@
         continue;
       }
 
-      if (!matchesPageTargets(campaign)) {
-        continue;
-      }
-
-      if (!matchesDevices(campaign)) {
-        continue;
-      }
-
-      if (!matchesCampaignAudience(campaign)) {
-        continue;
-      }
-
-      if (!withinFrequencyCap(campaign)) {
-        continue;
-      }
-
-      if (collectedBlocks(campaign)) {
-        continue;
-      }
-
-      if (dismissedBlocks(campaign)) {
-        continue;
-      }
-
       var settings = popupSettingsFor(
         campaign.steps,
       );
 
-      if (!matchesAudience(settings)) {
+      /* The first rule that says no, in the order they are
+         checked. Named so ?mq_debug=1 can say why. */
+      var reason = !matchesPageTargets(campaign)
+        ? "this page is not one of its target pages"
+        : !matchesDevices(campaign)
+          ? "it is not set to show on " + currentDevice()
+          : !matchesCampaignAudience(campaign)
+            ? "this visitor is not in its audience (" + (campaign.audience || "All visitors") + ")"
+            : !withinFrequencyCap(campaign)
+              ? "this browser already saw it the maximum number of times"
+              : collectedBlocks(campaign)
+                ? "this browser already signed up (After they submit: " +
+                  (Number(campaign.reshowCollectedDays) > 0
+                    ? campaign.reshowCollectedDays + " days)"
+                    : "never show again)")
+                : dismissedBlocks(campaign)
+                  ? "this browser closed it (After they close it: " +
+                    (Number(campaign.reshowDismissedDays) > 0
+                      ? campaign.reshowDismissedDays + " days)"
+                      : "never show again)")
+                  : !matchesAudience(settings)
+                    ? "the popup's own new / returning visitor setting excludes this visitor"
+                    : null;
+
+      if (reason) {
+        debugLog('Skipped "' + (campaign.popupName || campaign.campaignId) + '": ' + reason + ".");
         continue;
       }
 
+      debugLog(
+        'Showing "' +
+          (campaign.popupName || campaign.campaignId) +
+          '" (trigger: ' +
+          (campaign.trigger || "Immediately") +
+          ").",
+      );
       return campaign;
     }
 

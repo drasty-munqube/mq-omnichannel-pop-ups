@@ -1305,7 +1305,7 @@ export default function Campaigns() {
     return options;
   })();
 
-  const totalSteps = 7;
+  const totalSteps = 8;
 
   /* =========================================================
      CAMPAIGN DATA
@@ -2060,7 +2060,7 @@ export default function Campaigns() {
     }
 
     if (
-      step === 4 &&
+      step === 5 &&
       siteTargetMode === "selected" &&
       siteTargets.length === 0
     ) {
@@ -2068,7 +2068,7 @@ export default function Campaigns() {
         "Choose a website, or switch to all websites.";
     }
 
-    if (step === 5 && !selectedReward) {
+    if (step === 6 && !selectedReward) {
       stepErrors.selectedReward =
         "Please choose a reward option.";
     }
@@ -2579,6 +2579,24 @@ export default function Campaigns() {
                           onSelect: () =>
                             handleEditCampaign(campaign),
                         },
+                        ...(campaign.status.toLowerCase() ===
+                        "active"
+                          ? [
+                              {
+                                /* Opens the storefront with this
+                                   campaign shown straight away,
+                                   skipping every rule. Nothing
+                                   is remembered or counted. */
+                                label: "Preview on store",
+                                onSelect: () =>
+                                  window.open(
+                                    `https://${shop}/?mq_campaign=${encodeURIComponent(campaign.id)}`,
+                                    "_blank",
+                                    "noopener",
+                                  ),
+                              },
+                            ]
+                          : []),
                         {
                           label: "Delete",
                           onSelect: () =>
@@ -3055,6 +3073,7 @@ export default function Campaigns() {
                   "Build",
                   "Popup",
                   "Target",
+                  "Floating button",
                   "Websites",
                   "Reward",
                   "Email",
@@ -4752,210 +4771,6 @@ export default function Campaigns() {
                   </div>
 
                   {/* =============================================
-                      FLOATING BUTTON
-
-                      The teaser pill that opens the offer: shown
-                      first when the trigger fires, and again after
-                      a shopper closes the offer. Stored on the
-                      campaign, so the same popup can sit in a
-                      different place in another campaign.
-                  ============================================= */}
-
-                  <div
-                    style={{
-                      marginTop: "36px",
-                      paddingTop: "28px",
-                      borderTop: "1px solid #E7EBEF",
-                    }}
-                  >
-                    <h2
-                      style={{
-                        margin: "0 0 8px",
-                        fontSize: "24px",
-                        color: "#172033",
-                      }}
-                    >
-                      Where should the floating button sit?
-                    </h2>
-
-                    <p
-                      style={{
-                        margin: 0,
-                        color: "#6B7280",
-                        fontSize: "14px",
-                      }}
-                    >
-                      The floating button is the small tab that
-                      opens your offer. Shoppers see it first,
-                      and it stays on screen after they close the
-                      offer, so they can open it again later.
-                    </p>
-
-                    <div
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns:
-                          "repeat(auto-fit, minmax(230px, 1fr))",
-                        gap: "12px",
-                        marginTop: "20px",
-                      }}
-                    >
-                      {FLOATING_BUTTON_OPTIONS.map((option) => {
-                        const selected =
-                          floatingButton === option.value;
-
-                        return (
-                          <button
-                            key={option.value}
-                            type="button"
-                            aria-pressed={selected}
-                            onClick={() =>
-                              setFloatingButton(option.value)
-                            }
-                            style={{
-                              textAlign: "left",
-                              padding: "14px",
-                              background: selected
-                                ? "#F3F7FB"
-                                : "#FFFFFF",
-                              border: selected
-                                ? "2px solid #0B3D66"
-                                : "1px solid #DCE3EA",
-                              borderRadius: "10px",
-                              cursor: "pointer",
-                              display: "grid",
-                              alignContent: "start",
-                              gap: "10px",
-                            }}
-                          >
-                            {/* Mini screen showing where it sits */}
-                            <span
-                              aria-hidden
-                              style={{
-                                position: "relative",
-                                display: "block",
-                                height: "74px",
-                                borderRadius: "7px",
-                                background: "#F4F6F8",
-                                border: "1px solid #E4E8ED",
-                                overflow: "hidden",
-                              }}
-                            >
-                              {option.value === "none" ? (
-                                <span
-                                  style={{
-                                    position: "absolute",
-                                    inset: "14px 34px",
-                                    borderRadius: "5px",
-                                    background: "#FFFFFF",
-                                    border: "1px solid #DCE3EA",
-                                  }}
-                                />
-                              ) : (
-                                <span
-                                  style={{
-                                    position: "absolute",
-                                    background: "#0B3D66",
-                                    color: "#FFFFFF",
-                                    fontSize: "8px",
-                                    fontWeight: 700,
-                                    letterSpacing: ".04em",
-                                    whiteSpace: "nowrap",
-                                    ...floatingButtonPreviewStyle(
-                                      option.value,
-                                    ),
-                                    ...(isEdgePosition(option.value)
-                                      ? {
-                                          padding: "8px 3px",
-                                          borderRadius: "6px 0 0 6px",
-                                        }
-                                      : {
-                                          padding: "4px 8px",
-                                          borderRadius: "999px",
-                                          bottom: "8px",
-                                          [option.value === "bottom_left"
-                                            ? "left"
-                                            : "right"]: "8px",
-                                        }),
-                                  }}
-                                >
-                                  GET 10% OFF
-                                </span>
-                              )}
-                            </span>
-
-                            <span
-                              style={{
-                                display: "flex",
-                                alignItems: "center",
-                                gap: "8px",
-                                flexWrap: "wrap",
-                              }}
-                            >
-                              <strong
-                                style={{
-                                  color: "#172033",
-                                  fontSize: "14px",
-                                }}
-                              >
-                                {option.label}
-                              </strong>
-                              {option.tag ? (
-                                <span
-                                  style={{
-                                    fontSize: "10px",
-                                    fontWeight: 700,
-                                    color: "#9A5B00",
-                                    background: "#FDF3E1",
-                                    borderRadius: "4px",
-                                    padding: "2px 6px",
-                                  }}
-                                >
-                                  {option.tag.toUpperCase()}
-                                </span>
-                              ) : null}
-                            </span>
-
-                            <span
-                              style={{
-                                color: "#6B7280",
-                                fontSize: "12px",
-                                lineHeight: 1.45,
-                              }}
-                            >
-                              {option.help}
-                            </span>
-                          </button>
-                        );
-                      })}
-                    </div>
-
-                    <div
-                      role="note"
-                      style={{
-                        marginTop: "14px",
-                        padding: "12px 14px",
-                        borderRadius: "9px",
-                        background: "#F3F7FB",
-                        border: "1px solid #DCE6F0",
-                        color: "#35506B",
-                        fontSize: "12px",
-                        lineHeight: 1.5,
-                      }}
-                    >
-                      <strong>Note:</strong> the button uses the
-                      teaser text and colors from your popup. A
-                      shopper can hide it with its × button. It
-                      then stays hidden for the days you set under
-                      "after they close it" below. After a signup
-                      it does not come back.
-                      {floatingButton === "none"
-                        ? " With no floating button, the offer opens straight away when the trigger fires."
-                        : null}
-                    </div>
-                  </div>
-
-                  {/* =============================================
                       HOW OFTEN?
 
                       Counted per visitor in their own browser's
@@ -5123,6 +4938,32 @@ export default function Campaigns() {
 
                     {renderError("frequencyLimit")}
 
+                    {frequencyMode === "unlimited" ? (
+                      /* No limit means no conditions: the widget
+                         ignores both cooldowns, so they are not
+                         asked for here. */
+                      <div
+                        role="note"
+                        style={{
+                          marginTop: "20px",
+                          padding: "12px 14px",
+                          borderRadius: "9px",
+                          background: "#F3F7FB",
+                          border: "1px solid #DCE6F0",
+                          color: "#35506B",
+                          fontSize: "12px",
+                          lineHeight: 1.5,
+                        }}
+                      >
+                        <strong>No limit:</strong> the popup shows on
+                        every page load, every time the trigger fires,
+                        even after a shopper signs up or closes it.
+                        Pick &quot;Only once&quot; or &quot;A set
+                        number&quot; to add rules for after they
+                        submit or close it.
+                      </div>
+                    ) : (
+                      <>
                     {/* COOLDOWNS */}
 
                     <div
@@ -5249,6 +5090,39 @@ export default function Campaigns() {
                       switches device, they start
                       fresh.
                     </p>
+
+                    <div
+                      role="note"
+                      style={{
+                        marginTop: "12px",
+                        padding: "12px 14px",
+                        borderRadius: "9px",
+                        background: "#FDF3E1",
+                        border: "1px solid #F3DDB3",
+                        color: "#7A4A00",
+                        fontSize: "12px",
+                        lineHeight: 1.5,
+                      }}
+                    >
+                      <strong>Testing on your own store?</strong>{" "}
+                      Your browser counts as a visitor too. Once
+                      you sign up or close the popup, these rules
+                      hide it from you as well
+                      {reshowCollectedDays <= 0 ||
+                      reshowDismissedDays <= 0
+                        ? ", and with 0 days it never comes back in that browser"
+                        : ""}
+                      . To see it again, use{" "}
+                      <strong>Preview on store</strong> in the
+                      campaign&apos;s ⋮ menu, or open your store
+                      with <code>?mq_reset=1</code> at the end of
+                      the address to clear your browser&apos;s
+                      memory. Add <code>?mq_debug=1</code> to see
+                      in the browser console why a popup did not
+                      show.
+                    </div>
+                      </>
+                    )}
 
                   </div>
 
@@ -5394,13 +5268,13 @@ export default function Campaigns() {
 
 
               {/* =================================================
-                  STEP 4 — websites
+                  STEP 4 — floating button
 
-                  Page targeting in step 3 is about where inside
-                  a storefront a popup shows. This step is about
-                  which website it shows on at all, which starts
-                  to matter the moment the embed snippet is on
-                  more than one site.
+                  The teaser pill that opens the offer: shown
+                  first when the trigger fires, and again after
+                  a shopper closes the offer. Stored on the
+                  campaign, so the same popup can sit in a
+                  different place in another campaign.
               ================================================= */}
 
               {wizardStep === 4 && (
@@ -5419,7 +5293,235 @@ export default function Campaigns() {
                       fontWeight: 700,
                     }}
                   >
-                    STEP 4 · WEBSITES
+                    STEP 4 · FLOATING BUTTON
+                  </div>
+
+                  <h2
+                    style={{
+                      margin: "10px 0 8px",
+                      fontSize: "28px",
+                      color: "#172033",
+                    }}
+                  >
+                    Where should the floating button sit?
+                  </h2>
+
+                  <p
+                    style={{
+                      margin: 0,
+                      color: "#6B7280",
+                      fontSize: "14px",
+                    }}
+                  >
+                    The floating button is the small tab that
+                    opens your offer. Shoppers see it first, and
+                    it stays on screen after they close the
+                    offer, so they can open it again later.
+                  </p>
+
+                  <div style={{ marginTop: "10px" }}>
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns:
+                          "repeat(auto-fit, minmax(230px, 1fr))",
+                        gap: "12px",
+                        marginTop: "20px",
+                      }}
+                    >
+                      {FLOATING_BUTTON_OPTIONS.map((option) => {
+                        const selected =
+                          floatingButton === option.value;
+
+                        return (
+                          <button
+                            key={option.value}
+                            type="button"
+                            aria-pressed={selected}
+                            onClick={() =>
+                              setFloatingButton(option.value)
+                            }
+                            style={{
+                              textAlign: "left",
+                              padding: "14px",
+                              background: selected
+                                ? "#F3F7FB"
+                                : "#FFFFFF",
+                              border: selected
+                                ? "2px solid #0B3D66"
+                                : "1px solid #DCE3EA",
+                              borderRadius: "10px",
+                              cursor: "pointer",
+                              display: "grid",
+                              alignContent: "start",
+                              gap: "10px",
+                            }}
+                          >
+                            {/* Mini screen showing where it sits */}
+                            <span
+                              aria-hidden
+                              style={{
+                                position: "relative",
+                                display: "block",
+                                height: "74px",
+                                borderRadius: "7px",
+                                background: "#F4F6F8",
+                                border: "1px solid #E4E8ED",
+                                overflow: "hidden",
+                              }}
+                            >
+                              {option.value === "none" ? (
+                                <span
+                                  style={{
+                                    position: "absolute",
+                                    inset: "14px 34px",
+                                    borderRadius: "5px",
+                                    background: "#FFFFFF",
+                                    border: "1px solid #DCE3EA",
+                                  }}
+                                />
+                              ) : (
+                                <span
+                                  style={{
+                                    position: "absolute",
+                                    background: "#0B3D66",
+                                    color: "#FFFFFF",
+                                    fontSize: "8px",
+                                    fontWeight: 700,
+                                    letterSpacing: ".04em",
+                                    whiteSpace: "nowrap",
+                                    ...floatingButtonPreviewStyle(
+                                      option.value,
+                                    ),
+                                    ...(isEdgePosition(option.value)
+                                      ? {
+                                          padding: "8px 3px",
+                                          borderRadius: "6px 0 0 6px",
+                                        }
+                                      : {
+                                          padding: "4px 8px",
+                                          borderRadius: "999px",
+                                          bottom: "8px",
+                                          [option.value === "bottom_left"
+                                            ? "left"
+                                            : "right"]: "8px",
+                                        }),
+                                  }}
+                                >
+                                  GET 10% OFF
+                                </span>
+                              )}
+                            </span>
+
+                            <span
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "8px",
+                                flexWrap: "wrap",
+                              }}
+                            >
+                              <strong
+                                style={{
+                                  color: "#172033",
+                                  fontSize: "14px",
+                                }}
+                              >
+                                {option.label}
+                              </strong>
+                              {option.tag ? (
+                                <span
+                                  style={{
+                                    fontSize: "10px",
+                                    fontWeight: 700,
+                                    color: "#9A5B00",
+                                    background: "#FDF3E1",
+                                    borderRadius: "4px",
+                                    padding: "2px 6px",
+                                  }}
+                                >
+                                  {option.tag.toUpperCase()}
+                                </span>
+                              ) : null}
+                            </span>
+
+                            <span
+                              style={{
+                                color: "#6B7280",
+                                fontSize: "12px",
+                                lineHeight: 1.45,
+                              }}
+                            >
+                              {option.help}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    <div
+                      role="note"
+                      style={{
+                        marginTop: "14px",
+                        padding: "12px 14px",
+                        borderRadius: "9px",
+                        background: "#F3F7FB",
+                        border: "1px solid #DCE6F0",
+                        color: "#35506B",
+                        fontSize: "12px",
+                        lineHeight: 1.5,
+                      }}
+                    >
+                      <strong>Note:</strong> the button uses the
+                      teaser text and colors from your popup, and a
+                      shopper can hide it with its × button.{" "}
+                      {frequencyMode === "unlimited"
+                        ? "Your campaign is set to No limit (step 3), so it comes back on the next page, even after a signup."
+                        : `It then stays hidden for ${
+                            reshowDismissedDays > 0
+                              ? `${reshowDismissedDays} day${reshowDismissedDays === 1 ? "" : "s"}`
+                              : "good"
+                          } ("After they close it" in step 3). After a signup it stays hidden for ${
+                            reshowCollectedDays > 0
+                              ? `${reshowCollectedDays} day${reshowCollectedDays === 1 ? "" : "s"}`
+                              : "good"
+                          } ("After they submit").`}
+                      {floatingButton === "none"
+                        ? " With no floating button, the offer opens straight away when the trigger fires."
+                        : null}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+
+              {/* =================================================
+                  STEP 5 — websites
+
+                  Page targeting in step 3 is about where inside
+                  a storefront a popup shows. This step is about
+                  which website it shows on at all, which starts
+                  to matter the moment the embed snippet is on
+                  more than one site.
+              ================================================= */}
+
+              {wizardStep === 5 && (
+
+                <div
+                  style={{
+                    maxWidth: "1040px",
+                    margin: "0 auto",
+                  }}
+                >
+
+                  <div
+                    style={{
+                      color: "#7651D8",
+                      fontSize: "11px",
+                      fontWeight: 700,
+                    }}
+                  >
+                    STEP 5 · WEBSITES
                   </div>
 
                   <h2
@@ -5775,10 +5877,10 @@ export default function Campaigns() {
 
 
               {/* =================================================
-                  STEP 5 — reward
+                  STEP 6 — reward
               ================================================= */}
 
-              {wizardStep === 5 && (
+              {wizardStep === 6 && (
 
                 <div
                   style={{
@@ -5794,7 +5896,7 @@ export default function Campaigns() {
                       fontWeight: 700,
                     }}
                   >
-                    STEP 5 · REWARD
+                    STEP 6 · REWARD
                   </div>
 
                   <h2
@@ -6144,10 +6246,10 @@ export default function Campaigns() {
 
 
               {/* =================================================
-                  STEP 6 — email template
+                  STEP 7 — email template
               ================================================= */}
 
-              {wizardStep === 6 && (
+              {wizardStep === 7 && (
 
                 <div
                   style={{
@@ -6163,7 +6265,7 @@ export default function Campaigns() {
                       fontWeight: 700,
                     }}
                   >
-                    STEP 6 · EMAIL
+                    STEP 7 · EMAIL
                   </div>
 
                   <h2
@@ -6327,10 +6429,10 @@ export default function Campaigns() {
 
 
               {/* =================================================
-                  STEP 7 — review
+                  STEP 8 — review
               ================================================= */}
 
-              {wizardStep === 7 && (
+              {wizardStep === 8 && (
 
                 <div
                   style={{
@@ -6346,7 +6448,7 @@ export default function Campaigns() {
                       fontWeight: 700,
                     }}
                   >
-                    STEP 7 · REVIEW
+                    STEP 8 · REVIEW
                   </div>
 
                   <h2
@@ -6758,13 +6860,19 @@ export default function Campaigns() {
                             color: "#9AA4B2",
                           }}
                         >
-                          {reshowCollectedDays <= 0
-                            ? "Never again after they submit"
-                            : `Again ${reshowCollectedDays}d after they submit`}
-                          {" · "}
-                          {reshowDismissedDays <= 0
-                            ? "never again after they close it"
-                            : `${reshowDismissedDays}d after they close it`}
+                          {frequencyMode === "unlimited"
+                            ? "Every time, even after they submit or close it"
+                            : (
+                              <>
+                                {reshowCollectedDays <= 0
+                                  ? "Never again after they submit"
+                                  : `Again ${reshowCollectedDays}d after they submit`}
+                                {" · "}
+                                {reshowDismissedDays <= 0
+                                  ? "never again after they close it"
+                                  : `${reshowDismissedDays}d after they close it`}
+                              </>
+                            )}
                         </span>
                       </div>
 
