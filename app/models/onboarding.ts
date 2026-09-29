@@ -62,8 +62,8 @@ export const TOUR_STEPS: TourStep[] = [
   },
   {
     icon: "☰",
-    title: "Contacts and Journey",
-    body: "Everyone who signs up lands in Contacts. Open a contact's Journey to see the pages they viewed, the popups they saw and the emails they got.",
+    title: "Visitors and Contacts",
+    body: "Visitors shows everyone who comes to your store, even before they sign up: pages viewed, popups seen and clicked. Everyone who signs up also lands in Contacts, with their full Journey.",
   },
   {
     icon: "✉",

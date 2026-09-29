@@ -102,3 +102,20 @@ describe("helpers", () => {
     expect(utmFromUrl("::")).toMatchObject({ utmSource: null });
   });
 });
+
+describe("popup_clicked", () => {
+  it("accepts a click with a short, one-line label, and ignores labels on other events", async () => {
+    const { validateTrackPayload } = await import("./visitor-tracking");
+    const r = validateTrackPayload({
+      anonymousId: "0f8fad5b-d9cb-469f-a165-70867728950e",
+      events: [
+        { eventId: "1b4e28ba-2fa1-41d2-883f-0016d3cca427", type: "popup_clicked", campaignId: "cmp_1", label: "  Get\n my   code " + "x".repeat(200) },
+        { eventId: "2b4e28ba-2fa1-41d2-883f-0016d3cca427", type: "page_view", label: "nope" },
+      ],
+    });
+    if (!r.ok) throw new Error(r.error);
+    expect(r.value.events[0].label?.startsWith("Get my code x")).toBe(true);
+    expect(r.value.events[0].label?.length).toBe(80);
+    expect(r.value.events[1].label).toBeNull();
+  });
+});

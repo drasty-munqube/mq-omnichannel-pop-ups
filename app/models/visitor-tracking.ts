@@ -14,7 +14,7 @@
 /* Events the browser may send. popup_submitted and identified are
    written by the server itself, at the moment it saves the
    contact, so a browser cannot fake a signup. */
-export const CLIENT_EVENT_TYPES = ["page_view", "popup_shown", "popup_closed"] as const;
+export const CLIENT_EVENT_TYPES = ["page_view", "popup_shown", "popup_closed", "popup_clicked"] as const;
 export const SERVER_EVENT_TYPES = ["popup_submitted", "identified"] as const;
 export type ClientEventType = (typeof CLIENT_EVENT_TYPES)[number];
 export type VisitorEventType = ClientEventType | (typeof SERVER_EVENT_TYPES)[number];
@@ -32,6 +32,8 @@ export type TrackEventInput = {
   popupId?: string;
   pageUrl?: string;
   occurredAt?: string;
+  /* popup_clicked only: the text of the button or link. */
+  label?: string;
 };
 
 /* POST /api/track and /apps/<proxy>/popups/track */
@@ -49,6 +51,7 @@ export type CleanEvent = {
   popupId: string | null;
   pageUrl: string | null;
   occurredAt: Date;
+  label: string | null;
 };
 
 export type CleanTrack = {
@@ -78,6 +81,7 @@ export const MAX_EVENTS_PER_REQUEST = 20;
 export const MAX_URL = 2048;
 export const MAX_ID = 64;
 export const MAX_BODY_BYTES = 16_000;
+export const MAX_LABEL = 80;
 /* Browser clocks drift; events claiming to be from far in the past
    or the future are pulled back to "now". */
 const PAST_MS = 24 * 60 * 60 * 1000;
@@ -160,6 +164,8 @@ export function validateTrackPayload(body: unknown, now = new Date()): Validatio
       popupId: cleanId(e.popupId),
       pageUrl: cleanUrl(e.pageUrl),
       occurredAt: clampTime(e.occurredAt, now),
+      /* Plain text, one line, short. It is only ever shown as text. */
+      label: type === "popup_clicked" ? cleanText(typeof e.label === "string" ? e.label.replace(/\s+/g, " ") : null, MAX_LABEL) : null,
     });
   }
 

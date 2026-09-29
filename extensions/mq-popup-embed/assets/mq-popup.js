@@ -944,7 +944,7 @@
     trackTimer = window.setTimeout(flushTrack, 1000);
   }
 
-  function trackVisitorEvent(type, campaign) {
+  function trackVisitorEvent(type, campaign, label) {
     if (TRACKING_OFF || consentState === "denied") {
       return;
     }
@@ -956,6 +956,7 @@
       popupId: campaign ? campaign.popupId : undefined,
       pageUrl: window.location.href,
       occurredAt: new Date().toISOString(),
+      label: label || undefined,
     });
 
     /* Held while consent is still being decided, but never more
@@ -1306,6 +1307,7 @@
        many ways there are to close the thing. */
     var submitted = false;
     var dismissSent = false;
+    var openSent = false;
 
     function reportDismiss() {
       if (submitted || dismissSent) {
@@ -1313,6 +1315,39 @@
       }
       dismissSent = true;
       sendEvent(campaign, "dismiss");
+    }
+
+    /* Any button or link the shopper clicks in the teaser or the
+       popup lands in their visitor history with its text, so the
+       merchant can see who clicked what. Capture phase, so a
+       handler that stops the click (the teaser's close button)
+       is still counted. Only the visible label is kept, never
+       what was typed into a field. */
+    function trackPopupClick(event) {
+      if (inThemeEditor()) {
+        return;
+      }
+
+      var target = event.target;
+      var control =
+        target && target.closest
+          ? target.closest("button, a, [type='button']")
+          : null;
+
+      if (!control) {
+        return;
+      }
+
+      var label = (
+        control.getAttribute("aria-label") ||
+        control.textContent ||
+        ""
+      )
+        .replace(/\s+/g, " ")
+        .trim()
+        .slice(0, 80);
+
+      trackVisitorEvent("popup_clicked", campaign, label);
     }
 
     var pill = el("div", {
@@ -1335,6 +1370,8 @@
       fontFamily:
         "-apple-system, BlinkMacSystemFont, sans-serif",
     });
+    pill.addEventListener("click", trackPopupClick, true);
+
 
     var teaserStep = findStep(
       campaign.steps,
@@ -1399,6 +1436,46 @@
 
     pill.appendChild(pillLabel);
     pill.appendChild(pillClose);
+
+    /* ---------------- FLOATING BUTTON POSITION ----------------
+       Chosen per campaign in the campaign wizard: a pill in a bottom
+       corner, a slim tab in the middle of the left or right edge, or
+       "none" to open the offer by itself. On the left edge the tab is turned so its
+       text reads from the bottom up, like a book spine. */
+
+    var floatingPosition = [
+      "bottom_right",
+      "bottom_left",
+      "left_wall",
+      "right_wall",
+      "none",
+    ].indexOf(campaign.floatingButton) === -1
+      ? "bottom_right"
+      : campaign.floatingButton;
+
+    if (
+      floatingPosition === "left_wall" ||
+      floatingPosition === "right_wall"
+    ) {
+      var onLeft = floatingPosition === "left_wall";
+      pill.style.right = onLeft ? "auto" : "0";
+      pill.style.left = onLeft ? "0" : "auto";
+      pill.style.bottom = "auto";
+      pill.style.top = "50%";
+      pill.style.writingMode = "vertical-rl";
+      pill.style.transform = onLeft
+        ? "translateY(-50%) rotate(180deg)"
+        : "translateY(-50%)";
+      pill.style.borderRadius = "12px 0 0 12px";
+      pillLabel.style.maxWidth = "none";
+      pillLabel.style.maxHeight = "260px";
+      pillLabel.style.padding = "18px 12px 8px";
+      pillClose.style.marginRight = "0";
+      pillClose.style.marginBottom = "10px";
+    } else if (floatingPosition === "bottom_left") {
+      pill.style.right = "auto";
+      pill.style.left = "16px";
+    }
 
     function renderStep(stepId) {
       var step = findStep(campaign.steps, stepId);
@@ -1602,6 +1679,13 @@
         reportDismiss();
         overlay.remove();
         overlay = null;
+
+        /* The floating button comes back, so a shopper who closed
+           the offer can still open it again later on this page.
+           Not after a signup, and not when there is no button. */
+        if (!submitted && floatingPosition !== "none") {
+          document.body.appendChild(pill);
+        }
       }
     }
 
@@ -1613,6 +1697,13 @@
       /* Hide the teaser while the offer is open — otherwise
          both are visible stacked on top of each other. */
       pill.remove();
+
+      /* Step 2 of the popup funnel: the shopper opened the offer.
+         Counted once per page load. */
+      if (!openSent) {
+        openSent = true;
+        sendEvent(campaign, "open");
+      }
 
       overlay = el("div", {
         position: "fixed",
@@ -1627,6 +1718,8 @@
         fontFamily:
           "-apple-system, BlinkMacSystemFont, sans-serif",
       });
+      overlay.addEventListener("click", trackPopupClick, true);
+
       overlay.addEventListener(
         "click",
         function (event) {
@@ -1667,6 +1760,12 @@
         );
         markViewed(campaign.campaignId);
         sendEvent(campaign, "view");
+      }
+
+      /* No floating button: the offer opens by itself. */
+      if (floatingPosition === "none") {
+        openOffer();
+        return;
       }
 
       document.body.appendChild(pill);

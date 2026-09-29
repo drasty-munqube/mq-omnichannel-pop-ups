@@ -77,6 +77,11 @@ model Campaign {
   // unaffected.
   devices              Json     @default("[\"desktop\", \"tablet\", \"mobile\"]")
 
+  // Where the floating button (the teaser that opens the offer) sits:
+  // "bottom_right" (default, where it always was), "bottom_left",
+  // "left_wall", "right_wall", or "none" to open the offer by itself.
+  floatingButton       String   @default("bottom_right")
+
   reward               String
   rewardDiscountId     String?
   rewardDiscountCode   String?
@@ -154,8 +159,14 @@ model PopupEvent {
   campaignId String
   popupId    String?
 
-  // "view" | "submit" | "dismiss"
+  // "view" | "open" | "submit" | "dismiss". "open" is the shopper
+  // opening the offer from the teaser.
   type       String
+
+  // Submit events only: whether the shopper gave an email and a phone
+  // number. Null on submits from before this was recorded.
+  hasEmail   Boolean?
+  hasPhone   Boolean?
 
   // Which width bucket the shopper was in, so a merchant can see that
   // a campaign converts on desktop but not on mobile.
@@ -400,6 +411,7 @@ model Visitor {
   @@index([shop, shopifyCustomerId])
   @@index([shop, contactId])
   @@index([shop, lastSeenAt])
+  @@index([shop, firstSeenAt])
 }
 
 /* One thing a visitor did: page_view, popup_shown, popup_closed,
@@ -429,4 +441,5 @@ model VisitorEvent {
   @@index([shop, contactId, occurredAt])
   @@index([shop, campaignId, occurredAt])
   @@index([visitorId, occurredAt])
+  @@index([shop, type, occurredAt])
 }

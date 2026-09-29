@@ -15,8 +15,8 @@ import { useFetcher } from "react-router";
 
 import { AuditDate } from "./audit-cells";
 import { badge, button, modalOverlay, modalPanel, skeleton } from "../design/styles";
-import type { BadgeTone } from "../design/styles";
 import { color, fontFamily, fontWeight, radius, space, text, zIndex } from "../design/tokens";
+import { eventLabel } from "../models/journey-events";
 
 type Journey = {
   contact: { id: string; email: string | null; phone: string | null; createdAt: string; shopifyCustomerId: string | null };
@@ -50,27 +50,6 @@ type Journey = {
     saved: boolean;
   }[];
 };
-
-const EVENT_LABEL: Record<string, { label: string; tone: BadgeTone }> = {
-  page_view: { label: "Page view", tone: "neutral" },
-  popup_shown: { label: "Popup shown", tone: "info" },
-  popup_closed: { label: "Popup closed", tone: "warning" },
-  popup_submitted: { label: "Signed up", tone: "success" },
-  identified: { label: "Identified", tone: "accent" },
-  email_sent: { label: "Email sent", tone: "info" },
-  email_delivered: { label: "Email delivered", tone: "success" },
-  email_delayed: { label: "Email delayed", tone: "warning" },
-  email_opened: { label: "Email opened", tone: "success" },
-  email_clicked: { label: "Email clicked", tone: "accent" },
-  email_bounced: { label: "Email bounced", tone: "danger" },
-  email_complained: { label: "Marked as spam", tone: "danger" },
-  email_failed: { label: "Email failed", tone: "danger" },
-  email_suppressed: { label: "Email suppressed", tone: "warning" },
-};
-
-function eventLabel(type: string) {
-  return EVENT_LABEL[type] || { label: type.replace(/_/g, " "), tone: "neutral" as BadgeTone };
-}
 
 const short = (id: string) => id.slice(0, 8);
 

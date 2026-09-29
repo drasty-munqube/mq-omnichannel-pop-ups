@@ -256,6 +256,19 @@ describe("trackVisitor (anonymous user creation)", () => {
     expect(mem.events[0]).toMatchObject({ type: "page_view", campaignId: null });
   });
 
+  it("stores a popup click with the button text", async () => {
+    await trackVisitor(
+      SHOP,
+      "shopify",
+      track(PHONE_AID, [
+        { eventId: uuid(1), type: "popup_clicked", campaignId: "cmp_1", popupId: "pop_1", label: "Get my code" },
+        { eventId: uuid(2), type: "popup_clicked", campaignId: "cmp_x", label: "Theirs" },
+      ]),
+    );
+    expect(mem.events).toHaveLength(1);
+    expect(mem.events[0]).toMatchObject({ type: "popup_clicked", campaignId: "cmp_1", meta: { label: "Get my code" } });
+  });
+
   it("records popup shown / closed from the existing event requests", async () => {
     expect(await recordPopupVisitorEvent(SHOP, "shopify", { anonymousId: PHONE_AID, type: "view", campaignId: "cmp_1", popupId: "pop_1" })).toBe(true);
     expect(await recordPopupVisitorEvent(SHOP, "shopify", { anonymousId: PHONE_AID, type: "dismiss", campaignId: "cmp_1" })).toBe(true);
@@ -263,6 +276,22 @@ describe("trackVisitor (anonymous user creation)", () => {
     expect(await recordPopupVisitorEvent(SHOP, "shopify", { anonymousId: PHONE_AID, type: "view", campaignId: "cmp_x" })).toBe(false);
     expect(mem.events.map((e) => e.type)).toEqual(["popup_shown", "popup_closed"]);
     expect(mem.visitors[0].source).toBe("shopify");
+  });
+});
+
+describe("funnel events", () => {
+  it("writes the submit event with email and phone flags, and never takes a submit from the browser", async () => {
+    const { recordEvent } = await import("./popup-widget.server");
+    expect(await recordEvent(SHOP, "shopify", { type: "submit", campaignId: "cmp_1" })).toBe(false);
+    expect(await recordEvent(SHOP, "shopify", { type: "open", campaignId: "cmp_1", hasEmail: true } as any)).toBe(true);
+    expect(mem.popupEvents.at(-1)).not.toHaveProperty("hasEmail");
+
+    await saveSubmission(SHOP, { campaignId: "cmp_1", email: "a@b.co", fields: {} }, "shopify");
+    await saveSubmission(SHOP, { campaignId: "cmp_1", phone: "+15550102030", fields: {} }, "shopify");
+    expect(mem.popupEvents.filter((e) => e.type === "submit").map((e) => [e.hasEmail, e.hasPhone])).toEqual([
+      [true, false],
+      [false, true],
+    ]);
   });
 });
 

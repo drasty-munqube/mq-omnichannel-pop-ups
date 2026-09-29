@@ -4,6 +4,10 @@ import {
   queueCouponDelivery,
 } from "./delivery.server";
 import {
+  normalizeFloatingButton,
+  type FloatingButtonPosition,
+} from "./floating-button";
+import {
   identifyVisitor,
   linkShopifyCustomer,
   resolveContact,
@@ -41,6 +45,8 @@ export type EligibleCampaign = {
   reshowCollectedDays: number;
   reshowDismissedDays: number;
   devices: unknown;
+  /* Where the floating button sits (see models/floating-button). */
+  floatingButton: FloatingButtonPosition;
   steps: unknown;
 };
 
@@ -191,6 +197,9 @@ export async function getEligibleCampaigns(
         devices: normalizeDevices(
           campaign.devices,
         ),
+        floatingButton: normalizeFloatingButton(
+          campaign.floatingButton,
+        ),
         steps: popup.steps,
       };
     });
@@ -284,13 +293,21 @@ export async function saveSubmission(
      can be lost to a navigation, blocked, or replayed; a Contact
      row and its matching event are written by the same call. */
 
-  await recordEvent(shop, source, {
-    campaignId: body.campaignId,
-    popupId: body.popupId,
-    type: "submit",
-    device: body.device,
-    pageUrl: body.pageUrl,
-  });
+  await recordEvent(
+    shop,
+    source,
+    {
+      campaignId: body.campaignId,
+      popupId: body.popupId,
+      type: "submit",
+      device: body.device,
+      pageUrl: body.pageUrl,
+    },
+    {
+      hasEmail: Boolean(email && String(email).trim()),
+      hasPhone: Boolean(body.phone && String(body.phone).trim()),
+    },
+  );
 
   /* The shopper was promised a code, so the promise is written
      down before this call returns. Sending happens after, and
@@ -328,11 +345,21 @@ export async function saveSubmission(
 
 export type EventSource = "shopify" | "external";
 
+/* "open" is the shopper opening the offer from the teaser: step 2
+   of the popup funnel on Home. */
 const EVENT_TYPES = [
   "view",
+  "open",
   "submit",
   "dismiss",
 ];
+
+/* Written only by saveSubmission, for the funnel's "Submitted
+   email" and "Submitted phone" steps. */
+export type SubmissionFlags = {
+  hasEmail: boolean;
+  hasPhone: boolean;
+};
 
 export type EventInput = {
   campaignId?: string;
@@ -351,12 +378,20 @@ export async function recordEvent(
   shop: string,
   source: EventSource,
   input: EventInput,
+  submission?: SubmissionFlags,
 ) {
   const type = String(input.type || "");
 
   /* An unknown type would quietly corrupt every total that
      counts by type, so it is dropped rather than stored. */
   if (!EVENT_TYPES.includes(type)) {
+    return false;
+  }
+
+  /* A submit is only ever written by saveSubmission, alongside the
+     contact it created. The public event endpoints cannot post one,
+     so nobody can inflate signups from a browser. */
+  if (type === "submit" && !submission) {
     return false;
   }
 
@@ -386,6 +421,12 @@ export async function recordEvent(
           : null,
         source,
         pageUrl,
+        ...(submission
+          ? {
+              hasEmail: submission.hasEmail,
+              hasPhone: submission.hasPhone,
+            }
+          : {}),
       },
     });
 

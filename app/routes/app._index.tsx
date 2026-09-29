@@ -1,5 +1,5 @@
 import type { LoaderFunctionArgs } from "react-router";
-import { useLoaderData, useNavigate } from "react-router";
+import { useLoaderData, useNavigate, useNavigation, useSearchParams } from "react-router";
 
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
@@ -19,6 +19,7 @@ import {
   badge,
   button,
   card,
+  input,
   emptyState,
   eyebrow,
   interactive,
@@ -27,6 +28,10 @@ import {
 } from "../design/styles";
 import { useScrollReveal } from "../design/useScrollReveal";
 import { SetupGuide } from "../components/setup-guide";
+import { FunnelChart } from "../components/funnel-chart";
+import { RANGES, normalizeDays } from "../models/analytics";
+import { popupStepFunnel, visitorFunnel } from "../models/funnel";
+import { getFunnelCounts } from "../models/funnel.server";
 import { buildChecklist, themeEditorUrl } from "../models/onboarding";
 
 /* ============================================================
@@ -44,6 +49,13 @@ export async function loader({
 }: LoaderFunctionArgs) {
   const { session } =
     await authenticate.admin(request);
+
+  /* The funnel cards: one campaign or all of them, over 7, 30 or
+     90 days. The campaign id is checked against this shop's
+     campaigns below. */
+  const url = new URL(request.url);
+  const funnelDays = normalizeDays(url.searchParams.get("funnelDays"));
+  const funnelParam = url.searchParams.get("funnelCampaign") || "";
 
   /* The opt-in rate covers the last 30 days rather than all
      time. All time would keep quoting a number earned months
@@ -98,6 +110,12 @@ export async function loader({
 
   const [storefrontEvent, storefrontVisitor, verifiedDomainCount, contactCount] = setup;
 
+  const funnelCampaignId = campaigns.some((c) => c.id === funnelParam) ? funnelParam : null;
+  const funnelCounts = await getFunnelCounts(session.shop, {
+    campaignId: funnelCampaignId,
+    days: funnelDays,
+  });
+
   const eventTotals = emptyCounts();
 
   for (const row of events) {
@@ -137,6 +155,13 @@ export async function loader({
   return {
     shop: session.shop,
     setupSteps,
+
+    funnel: {
+      campaignId: funnelCampaignId,
+      days: funnelDays,
+      counts: funnelCounts,
+      campaigns: campaigns.map((c) => ({ id: c.id, name: c.name, live: c.status.toLowerCase() === "active" })),
+    },
 
     optInRate: formatRate(
       conversionRate(
@@ -288,6 +313,7 @@ export default function Index() {
   const {
     shop,
     setupSteps,
+    funnel,
     optInRate,
     optInViews,
     campaignCount,
@@ -300,6 +326,24 @@ export default function Index() {
   } = useLoaderData<typeof loader>();
 
   const navigate = useNavigate();
+  const navigation = useNavigation();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const funnelLoading =
+    navigation.state === "loading" &&
+    navigation.location?.pathname === "/app";
+
+  const setFunnel = (key: "funnelCampaign" | "funnelDays", value: string) => {
+    const next = new URLSearchParams(searchParams);
+    if (value) next.set(key, value);
+    else next.delete(key);
+    setSearchParams(next, { replace: true, preventScrollReset: true });
+  };
+
+  const visitorSteps = visitorFunnel(funnel.counts);
+  const popupSteps = popupStepFunnel(funnel.counts);
+  const funnelScope = funnel.campaignId
+    ? funnel.campaigns.find((c) => c.id === funnel.campaignId)?.name || "This campaign"
+    : "All campaigns";
 
   useScrollReveal();
 
@@ -452,6 +496,115 @@ export default function Index() {
           available={false}
         />
       </div>
+
+      {/* =====================================================
+          CAMPAIGN FUNNELS
+      ===================================================== */}
+
+      <section
+        aria-labelledby="mq-funnels-title"
+        style={{ marginBottom: space[5] }}
+      >
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "flex-end",
+            gap: space[5],
+            flexWrap: "wrap",
+            marginBottom: space[5],
+          }}
+        >
+          <div>
+            <h2
+              id="mq-funnels-title"
+              style={{ margin: 0, ...text.h3, color: color.textStrong }}
+            >
+              Campaign funnels
+            </h2>
+            <p style={{ margin: `${space[2]} 0 0`, ...text.bodySm, color: color.textMuted }}>
+              {funnelScope} · last {funnel.days} days
+            </p>
+          </div>
+
+          <div style={{ display: "flex", gap: space[3], flexWrap: "wrap", alignItems: "center" }}>
+            <label style={{ display: "flex", alignItems: "center", gap: space[3], ...text.bodySm, color: color.textMuted }}>
+              Campaign
+              <select
+                value={funnel.campaignId || ""}
+                onChange={(event) => setFunnel("funnelCampaign", event.target.value)}
+                style={{
+                  ...input(),
+                  width: "auto",
+                  maxWidth: "260px",
+                  paddingTop: space[3],
+                  paddingBottom: space[3],
+                }}
+              >
+                <option value="">All campaigns</option>
+                {funnel.campaigns.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                    {c.live ? "" : " (not live)"}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <div role="group" aria-label="Date range" style={{ display: "flex", gap: space[2] }}>
+              {RANGES.map((d) => (
+                <button
+                  key={d}
+                  type="button"
+                  aria-pressed={funnel.days === d}
+                  onClick={() => setFunnel("funnelDays", d === 30 ? "" : String(d))}
+                  style={button(funnel.days === d ? "primary" : "secondary", "sm")}
+                >
+                  {d} days
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div
+          className="mq-grid-halves"
+          aria-busy={funnelLoading}
+          style={{ gap: space[5], opacity: funnelLoading ? 0.6 : 1, transition: "opacity 150ms" }}
+        >
+          <div style={{ ...card({ elevation: "raised" }), padding: space[7] }}>
+            <h3 style={{ margin: 0, ...text.h4, color: color.textStrong }}>
+              Visitor funnel
+            </h3>
+            <p style={{ margin: `${space[2]} 0 ${space[7]}`, ...text.bodySm, color: color.textMuted }}>
+              How many shoppers saw the popup, and how many left their email or phone number.
+            </p>
+            <FunnelChart label="Visitor funnel" steps={visitorSteps} compare="first" />
+            {funnel.counts.unflaggedSubmits > 0 ? (
+              <p style={{ margin: `${space[6]} 0 0`, ...text.caption, color: color.textMuted }}>
+                {funnel.counts.unflaggedSubmits} earlier signup
+                {funnel.counts.unflaggedSubmits === 1 ? " is" : "s are"} not split into email and phone,
+                because they came in before this was recorded.
+              </p>
+            ) : null}
+          </div>
+
+          <div style={{ ...card({ elevation: "raised" }), padding: space[7] }}>
+            <h3 style={{ margin: 0, ...text.h4, color: color.textStrong }}>
+              Popup steps
+            </h3>
+            <p style={{ margin: `${space[2]} 0 ${space[7]}`, ...text.bodySm, color: color.textMuted }}>
+              How many shoppers reached each step of the popup, and the share that moved on from the step before.
+            </p>
+            <FunnelChart label="Popup steps" steps={popupSteps} compare="previous" />
+            {funnel.counts.opens === 0 && funnel.counts.submits > 0 ? (
+              <p style={{ margin: `${space[6]} 0 0`, ...text.caption, color: color.textMuted }}>
+                Offer opens are counted from this update on, so older signups show no Step 2.
+              </p>
+            ) : null}
+          </div>
+        </div>
+      </section>
 
       {/* =====================================================
           INSIGHTS + RUNNING NOW

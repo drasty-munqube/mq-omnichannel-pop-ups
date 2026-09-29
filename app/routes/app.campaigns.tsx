@@ -13,6 +13,14 @@ import {
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
 import { actorName } from "../models/actor.server";
+import {
+  DEFAULT_FLOATING_BUTTON,
+  FLOATING_BUTTON_OPTIONS,
+  floatingButtonPreviewStyle,
+  isEdgePosition,
+  normalizeFloatingButton,
+  type FloatingButtonPosition,
+} from "../models/floating-button";
 import { RowActions } from "../components/row-actions";
 import { AUDIT_GRID, AUDIT_HEADERS } from "../models/audit-format";
 import { AuditCells, stickyEnd } from "../components/audit-cells";
@@ -782,6 +790,10 @@ export async function action({
        number in the form should land on a sane value, not block
        the merchant from saving their campaign. */
 
+    const floatingButton = normalizeFloatingButton(
+      String(formData.get("floatingButton") || "").trim(),
+    );
+
     const frequencyModeRaw = String(
       formData.get("frequencyMode") || "unlimited",
     ).trim();
@@ -994,6 +1006,7 @@ export async function action({
       reshowCollectedDays,
       reshowDismissedDays,
       devices: devices as any,
+      floatingButton,
       reward,
       rewardDiscountId:
         rewardDiscountId || null,
@@ -1407,6 +1420,13 @@ export default function Campaigns() {
     setReshowDismissedDays,
   ] = useState(1);
 
+  /* Where the floating button (the teaser that opens the offer)
+     sits on the shopper's screen. */
+  const [floatingButton, setFloatingButton] =
+    useState<FloatingButtonPosition>(
+      DEFAULT_FLOATING_BUTTON,
+    );
+
   const ALL_DEVICES = [
     "desktop",
     "tablet",
@@ -1575,6 +1595,7 @@ export default function Campaigns() {
     setSiteTargetMode("all");
     setSiteTargets([]);
     setFrequencyMode("unlimited");
+    setFloatingButton(DEFAULT_FLOATING_BUTTON);
     setFrequencyLimit(3);
     setReshowCollectedDays(0);
     setReshowDismissedDays(1);
@@ -1660,6 +1681,11 @@ export default function Campaigns() {
       Array.isArray(campaign.siteTargets)
         ? (campaign.siteTargets as string[])
         : [],
+    );
+    setFloatingButton(
+      normalizeFloatingButton(
+        campaign.floatingButton,
+      ),
     );
     setFrequencyMode(
       campaign.frequencyMode === "once" ||
@@ -1850,6 +1876,10 @@ export default function Campaigns() {
     formData.append(
       "frequencyMode",
       frequencyMode,
+    );
+    formData.append(
+      "floatingButton",
+      floatingButton,
     );
     formData.append(
       "frequencyLimit",
@@ -4722,6 +4752,210 @@ export default function Campaigns() {
                   </div>
 
                   {/* =============================================
+                      FLOATING BUTTON
+
+                      The teaser pill that opens the offer: shown
+                      first when the trigger fires, and again after
+                      a shopper closes the offer. Stored on the
+                      campaign, so the same popup can sit in a
+                      different place in another campaign.
+                  ============================================= */}
+
+                  <div
+                    style={{
+                      marginTop: "36px",
+                      paddingTop: "28px",
+                      borderTop: "1px solid #E7EBEF",
+                    }}
+                  >
+                    <h2
+                      style={{
+                        margin: "0 0 8px",
+                        fontSize: "24px",
+                        color: "#172033",
+                      }}
+                    >
+                      Where should the floating button sit?
+                    </h2>
+
+                    <p
+                      style={{
+                        margin: 0,
+                        color: "#6B7280",
+                        fontSize: "14px",
+                      }}
+                    >
+                      The floating button is the small tab that
+                      opens your offer. Shoppers see it first,
+                      and it stays on screen after they close the
+                      offer, so they can open it again later.
+                    </p>
+
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns:
+                          "repeat(auto-fit, minmax(230px, 1fr))",
+                        gap: "12px",
+                        marginTop: "20px",
+                      }}
+                    >
+                      {FLOATING_BUTTON_OPTIONS.map((option) => {
+                        const selected =
+                          floatingButton === option.value;
+
+                        return (
+                          <button
+                            key={option.value}
+                            type="button"
+                            aria-pressed={selected}
+                            onClick={() =>
+                              setFloatingButton(option.value)
+                            }
+                            style={{
+                              textAlign: "left",
+                              padding: "14px",
+                              background: selected
+                                ? "#F3F7FB"
+                                : "#FFFFFF",
+                              border: selected
+                                ? "2px solid #0B3D66"
+                                : "1px solid #DCE3EA",
+                              borderRadius: "10px",
+                              cursor: "pointer",
+                              display: "grid",
+                              alignContent: "start",
+                              gap: "10px",
+                            }}
+                          >
+                            {/* Mini screen showing where it sits */}
+                            <span
+                              aria-hidden
+                              style={{
+                                position: "relative",
+                                display: "block",
+                                height: "74px",
+                                borderRadius: "7px",
+                                background: "#F4F6F8",
+                                border: "1px solid #E4E8ED",
+                                overflow: "hidden",
+                              }}
+                            >
+                              {option.value === "none" ? (
+                                <span
+                                  style={{
+                                    position: "absolute",
+                                    inset: "14px 34px",
+                                    borderRadius: "5px",
+                                    background: "#FFFFFF",
+                                    border: "1px solid #DCE3EA",
+                                  }}
+                                />
+                              ) : (
+                                <span
+                                  style={{
+                                    position: "absolute",
+                                    background: "#0B3D66",
+                                    color: "#FFFFFF",
+                                    fontSize: "8px",
+                                    fontWeight: 700,
+                                    letterSpacing: ".04em",
+                                    whiteSpace: "nowrap",
+                                    ...floatingButtonPreviewStyle(
+                                      option.value,
+                                    ),
+                                    ...(isEdgePosition(option.value)
+                                      ? {
+                                          padding: "8px 3px",
+                                          borderRadius: "6px 0 0 6px",
+                                        }
+                                      : {
+                                          padding: "4px 8px",
+                                          borderRadius: "999px",
+                                          bottom: "8px",
+                                          [option.value === "bottom_left"
+                                            ? "left"
+                                            : "right"]: "8px",
+                                        }),
+                                  }}
+                                >
+                                  GET 10% OFF
+                                </span>
+                              )}
+                            </span>
+
+                            <span
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "8px",
+                                flexWrap: "wrap",
+                              }}
+                            >
+                              <strong
+                                style={{
+                                  color: "#172033",
+                                  fontSize: "14px",
+                                }}
+                              >
+                                {option.label}
+                              </strong>
+                              {option.tag ? (
+                                <span
+                                  style={{
+                                    fontSize: "10px",
+                                    fontWeight: 700,
+                                    color: "#9A5B00",
+                                    background: "#FDF3E1",
+                                    borderRadius: "4px",
+                                    padding: "2px 6px",
+                                  }}
+                                >
+                                  {option.tag.toUpperCase()}
+                                </span>
+                              ) : null}
+                            </span>
+
+                            <span
+                              style={{
+                                color: "#6B7280",
+                                fontSize: "12px",
+                                lineHeight: 1.45,
+                              }}
+                            >
+                              {option.help}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    <div
+                      role="note"
+                      style={{
+                        marginTop: "14px",
+                        padding: "12px 14px",
+                        borderRadius: "9px",
+                        background: "#F3F7FB",
+                        border: "1px solid #DCE6F0",
+                        color: "#35506B",
+                        fontSize: "12px",
+                        lineHeight: 1.5,
+                      }}
+                    >
+                      <strong>Note:</strong> the button uses the
+                      teaser text and colors from your popup. A
+                      shopper can hide it with its × button. It
+                      then stays hidden for the days you set under
+                      "after they close it" below. After a signup
+                      it does not come back.
+                      {floatingButton === "none"
+                        ? " With no floating button, the offer opens straight away when the trigger fires."
+                        : null}
+                    </div>
+                  </div>
+
+                  {/* =============================================
                       HOW OFTEN?
 
                       Counted per visitor in their own browser's
@@ -6463,6 +6697,31 @@ export default function Campaigns() {
                               })()}
                             </span>
                           )}
+                      </div>
+
+                      <div>
+                        <span
+                          style={{
+                            display: "block",
+                            fontSize: "11px",
+                            color: "#9AA4B2",
+                            marginBottom: "4px",
+                          }}
+                        >
+                          FLOATING BUTTON
+                        </span>
+
+                        <strong
+                          style={{
+                            color: "#172033",
+                            fontSize: "14px",
+                          }}
+                        >
+                          {FLOATING_BUTTON_OPTIONS.find(
+                            (option) =>
+                              option.value === floatingButton,
+                          )?.label || "Bottom right"}
+                        </strong>
                       </div>
 
                       <div>

@@ -23,6 +23,7 @@
 import crypto from "node:crypto";
 
 import db from "../db.server";
+import { eventDetail } from "./journey-events";
 import {
   cleanCustomerId,
   isAnonymousId,
@@ -232,6 +233,7 @@ export async function trackVisitor(shop: string, source: TrackSource, track: Cle
       type: e.type,
       pageUrl: e.pageUrl ?? track.context.pageUrl,
       occurredAt: e.occurredAt,
+      ...(e.label ? { meta: { label: e.label } } : {}),
     }));
 
   if (!data.length) return { visitorId: visitor.id, stored: 0 };
@@ -577,10 +579,7 @@ export async function getContactJourney(shop: string, contactId: string) {
       pageUrl: e.pageUrl,
       campaignName: nameOf(e.campaignId),
       anonymousId: e.anonymousId,
-      detail:
-        e.type === "identified" && e.meta && typeof e.meta === "object" && (e.meta as { via?: string }).via === "shopify_login"
-          ? "Recognised from their store login"
-          : null,
+      detail: eventDetail(e.type, e.meta),
       saved: false,
     });
   }
