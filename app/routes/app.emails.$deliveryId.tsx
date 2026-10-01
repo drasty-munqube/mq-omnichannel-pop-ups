@@ -25,11 +25,13 @@ import { CopyButton } from "../components/copy-snippet";
 import { Breadcrumbs, Notice } from "../components/domain-ui";
 import { EmailTimeline } from "../components/email-timeline";
 import { badge, button, card } from "../design/styles";
-import { color, fontFamily, space, text } from "../design/tokens";
+import { color, fontFamily, layout, space, text } from "../design/tokens";
 import { getEmailDetail, retryEmailDelivery } from "../models/email-events.server";
 import { EMAIL_STATUS, canRetry } from "../models/email-status";
 import { buildTimeline, eventMeta, isFinalEvent } from "../models/email-timeline";
 import { authenticate } from "../shopify.server";
+import { ArrowLeft, RefreshCw, RotateCcw, Send } from "lucide-react";
+import { IconButton } from "../components/icon-button";
 
 const POLL_MS = 5_000;
 
@@ -139,9 +141,7 @@ export default function EmailDetailPage() {
           <Notice
             tone="danger"
             action={
-              <button type="button" style={button("secondary", "sm")} onClick={() => revalidator.revalidate()}>
-                Try again
-              </button>
+              <IconButton icon={RotateCcw} label="Try again" size="sm" onClick={() => revalidator.revalidate()} />
             }
           >
             This email could not be loaded. Please try again.
@@ -162,6 +162,7 @@ export default function EmailDetailPage() {
               It may have been removed, or it belongs to another store.
             </p>
             <Link to="/app/emails" style={{ ...button("secondary", "md"), textDecoration: "none" }}>
+              <ArrowLeft aria-hidden size={15} strokeWidth={2} />
               Back to Logs
             </Link>
           </div>
@@ -201,17 +202,18 @@ export default function EmailDetailPage() {
             </div>
           </div>
           <div style={{ display: "flex", gap: space[4], flexWrap: "wrap" }}>
-            <Link to="/app/emails" style={{ ...button("secondary", "md"), textDecoration: "none" }}>
-              Back
+            <Link to="/app/emails" aria-label="Back to logs" title="Back to logs" style={{ ...button("secondary", "md"), width: layout.controlMd, boxSizing: "border-box", padding: 0, textDecoration: "none" }}>
+              <ArrowLeft aria-hidden size={17} strokeWidth={2} />
             </Link>
-            <button
-              type="button"
-              style={button("secondary", "md", { disabled: Boolean(busyIntent) })}
+            <IconButton
+              icon={RefreshCw}
+              label="Refresh"
+              busyLabel="Refreshing"
+              spin
+              busy={busyIntent === "sync"}
               disabled={Boolean(busyIntent)}
               onClick={() => post("sync")}
-            >
-              {busyIntent === "sync" ? "Refreshing…" : "Refresh"}
-            </button>
+            />
             {canRetry(email.status) ? (
               <button
                 type="button"
@@ -219,6 +221,7 @@ export default function EmailDetailPage() {
                 disabled={Boolean(busyIntent)}
                 onClick={() => post("retry")}
               >
+                <Send aria-hidden size={15} strokeWidth={2} />
                 {busyIntent === "retry" ? "Sending…" : "Send again"}
               </button>
             ) : null}

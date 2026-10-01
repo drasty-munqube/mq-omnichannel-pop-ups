@@ -6,24 +6,41 @@
    (the clicked link, a bounce or failure reason).
    ============================================================ */
 
+import {
+  Ban,
+  Calendar,
+  Check,
+  Clock,
+  Dot,
+  Eye,
+  Flag,
+  ListOrdered,
+  MousePointerClick,
+  Send,
+  Undo2,
+  X,
+  type LucideIcon,
+} from "lucide-react";
+
 import { AuditDate } from "./audit-cells";
+import { RefLink } from "./ref-link";
 import { badge } from "../design/styles";
 import { color, fontWeight, radius, space, text } from "../design/tokens";
 import { eventMeta, type EventIcon, type TimelineEntry } from "../models/email-timeline";
 
-const ICON_PATHS: Record<EventIcon, string> = {
-  queue: "M4 6h16M4 12h16M4 18h10",
-  send: "M4 12 20 4l-4 16-4-7-8-1Z",
-  check: "m5 12.5 4.5 4.5L19 7",
-  clock: "M12 7v5l3 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z",
-  eye: "M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12ZM12 14.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z",
-  cursor: "m5 3 14 7-6 2-2 6L5 3Z",
-  bounce: "M9 14 4 9l5-5M4 9h10a6 6 0 0 1 0 12h-2",
-  flag: "M5 21V4m0 0h11l-2 4 2 4H5",
-  x: "M6 6l12 12M18 6 6 18",
-  calendar: "M4 7h16v13H4zM8 3v4m8-4v4M4 11h16",
-  block: "M5.6 5.6l12.8 12.8M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z",
-  dot: "M12 12h.01",
+const ICONS: Record<EventIcon, LucideIcon> = {
+  queue: ListOrdered,
+  send: Send,
+  check: Check,
+  clock: Clock,
+  eye: Eye,
+  cursor: MousePointerClick,
+  bounce: Undo2,
+  flag: Flag,
+  x: X,
+  calendar: Calendar,
+  block: Ban,
+  dot: Dot,
 };
 
 const TONE_COLORS = {
@@ -37,6 +54,7 @@ const TONE_COLORS = {
 
 export function EventGlyph({ icon, tone }: { icon: EventIcon; tone: keyof typeof TONE_COLORS }) {
   const c = TONE_COLORS[tone];
+  const Glyph = ICONS[icon];
   return (
     <span
       aria-hidden
@@ -54,9 +72,7 @@ export function EventGlyph({ icon, tone }: { icon: EventIcon; tone: keyof typeof
         zIndex: 1,
       }}
     >
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={icon === "dot" ? 6 : 1.9} strokeLinecap="round" strokeLinejoin="round">
-        <path d={ICON_PATHS[icon]} />
-      </svg>
+      <Glyph size={icon === "dot" ? 24 : 16} strokeWidth={icon === "dot" ? 3 : 2} />
     </span>
   );
 }
@@ -96,19 +112,14 @@ export function EmailTimeline({ entries }: { entries: TimelineEntry[] }) {
               {meta.help ? <div style={{ ...text.bodySm, color: color.textMuted }}>{meta.help}</div> : null}
 
               {entry.link && !/^https?:\/\//i.test(entry.link) ? (
-                <div style={{ marginTop: space[3], ...text.bodySm, color: color.text, overflowWrap: "anywhere" }}>Link: {entry.link}</div>
+                <div style={{ marginTop: space[3], display: "flex", gap: space[3], alignItems: "baseline", minWidth: 0, ...text.bodySm, color: color.text }}>
+                  <span style={{ color: color.textMuted, flexShrink: 0 }}>Link</span>
+                  <RefLink url={entry.link} />
+                </div>
               ) : entry.link ? (
                 <div style={{ marginTop: space[3], display: "flex", gap: space[3], alignItems: "baseline", minWidth: 0, ...text.bodySm }}>
                   <span style={{ color: color.textMuted, flexShrink: 0 }}>Link</span>
-                  <a
-                    href={entry.link}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    title={entry.link}
-                    style={{ color: color.primary, overflowWrap: "anywhere", fontWeight: fontWeight.medium }}
-                  >
-                    {entry.link}
-                  </a>
+                  <RefLink url={entry.link} />
                 </div>
               ) : null}
 

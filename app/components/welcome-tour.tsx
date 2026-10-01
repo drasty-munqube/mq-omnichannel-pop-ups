@@ -12,10 +12,20 @@
    ============================================================ */
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { ArrowLeft, LayoutTemplate, Mail, PartyPopper, Sparkles, Target, Users, type LucideIcon } from "lucide-react";
 
 import { button, modalOverlay, modalPanel } from "../design/styles";
 import { color, fontWeight, radius, space, text, zIndex } from "../design/tokens";
-import { TOUR_OPEN_EVENT, TOUR_STEPS, readFlag, tourKey, writeFlag } from "../models/onboarding";
+import { TOUR_OPEN_EVENT, TOUR_STEPS, readFlag, tourKey, writeFlag, type TourIcon } from "../models/onboarding";
+
+const TOUR_ICONS: Record<TourIcon, LucideIcon> = {
+  welcome: Sparkles,
+  popups: LayoutTemplate,
+  campaigns: Target,
+  contacts: Users,
+  logs: Mail,
+  ready: PartyPopper,
+};
 
 export function WelcomeTour({ shop }: { shop: string }) {
   const [open, setOpen] = useState(false);
@@ -54,6 +64,7 @@ export function WelcomeTour({ shop }: { shop: string }) {
 
   if (!open) return null;
   const current = TOUR_STEPS[step];
+  const CurrentIcon = TOUR_ICONS[current.icon];
 
   return (
     <div role="presentation" style={{ ...modalOverlay(), zIndex: zIndex.modal }}>
@@ -84,10 +95,9 @@ export function WelcomeTour({ shop }: { shop: string }) {
                 display: "inline-flex",
                 alignItems: "center",
                 justifyContent: "center",
-                fontSize: "20px",
               }}
             >
-              {current.icon}
+              <CurrentIcon size={22} strokeWidth={2} />
             </span>
             <span style={{ ...text.caption, color: color.textMuted }}>
               Step {step + 1} of {TOUR_STEPS.length}
@@ -150,6 +160,7 @@ export function WelcomeTour({ shop }: { shop: string }) {
           <div style={{ display: "flex", gap: space[3] }}>
             {step > 0 ? (
               <button type="button" style={button("secondary", "md")} onClick={() => setStep(step - 1)}>
+                <ArrowLeft aria-hidden size={15} strokeWidth={2} />
                 Back
               </button>
             ) : null}

@@ -103,3 +103,15 @@ export function formatPct(value: number | null) {
   if (value > 0 && value < 1) return "<1%";
   return `${Math.round(value)}%`;
 }
+
+/* The single funnel on Home: popup shown, then signed up. The
+   popup now always opens straight to the offer, so "offer opened"
+   is the same moment as "popup shown" and is not a step of its
+   own. (Older scripts sent opens only from the floating button,
+   which made the step read as a big drop-off.) */
+export function simpleFunnel(c: FunnelCounts) {
+  return buildFunnel([
+    { key: "shown", label: "Popup shown", value: c.views },
+    { key: "signed_up", label: "Signed up", value: c.submits },
+  ]);
+}

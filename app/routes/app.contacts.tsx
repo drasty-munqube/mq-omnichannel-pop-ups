@@ -5,11 +5,11 @@ import { useLoaderData } from "react-router";
 
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
-import { AUDIT_GRID, AUDIT_HEADERS } from "../models/audit-format";
-import { AuditCells, stickyEnd } from "../components/audit-cells";
 import { ContactJourneyDialog } from "../components/contact-journey";
-import { RowActions } from "../components/row-actions";
+import { PeopleList } from "../components/people-list";
 import { kickDeliveries } from "../models/delivery.server";
+import { loadPeoplePage } from "../models/people.server";
+import { Download } from "lucide-react";
 
 /* ============================================================
    CSV EXPORT
@@ -161,32 +161,10 @@ export async function loader({
     });
   }
 
-  const [contacts, total] = await Promise.all([
-    db.contact.findMany({
-      where: { shop: session.shop },
-      orderBy: { createdAt: "desc" },
-      take: 200,
-    }),
-    db.contact.count({
-      where: { shop: session.shop },
-    }),
-  ]);
-
-  return {
-    total,
-    contacts: contacts.map((contact) => ({
-      id: contact.id,
-      email: contact.email,
-      phone: contact.phone,
-      popupName: contact.popupName,
-      fields: contact.fields as Record<
-        string,
-        string
-      >,
-      pageUrl: contact.pageUrl,
-      createdAt: contact.createdAt,
-    })),
-  };
+  /* One list: contacts and anonymous visitors together (see
+     models/people.server.ts). The CSV export above stays
+     contacts only. */
+  return loadPeoplePage(session.shop, url);
 }
 
 /* ============================================================
@@ -194,8 +172,8 @@ export async function loader({
    ============================================================ */
 
 export default function Contacts() {
-  const { contacts, total } =
-    useLoaderData<typeof loader>();
+  const data = useLoaderData<typeof loader>();
+  const total = data.contactTotal;
 
   const [exporting, setExporting] =
     useState(false);
@@ -252,9 +230,7 @@ export default function Contacts() {
 
   return (
     <s-page inlineSize="large">
-
       <s-section>
-
         <div
           style={{
             display: "flex",
@@ -284,246 +260,36 @@ export default function Contacts() {
                 color: "#6B7280",
               }}
             >
-              Shoppers who submitted a popup on your
-              storefront. One row per email; open ⋮ to see a
-              contact&apos;s journey.
-              {total > contacts.length
-                ? ` Showing the latest ${contacts.length}; Export CSV gives you all ${total}.`
-                : ""}
+              Everyone who came to your store with MQ Pop-ups on. Visitors stay anonymous until they sign up, then
+              become contacts. Open a contact to see their journey.
             </p>
           </div>
 
-          <div
+          <button
+            type="button"
+            onClick={exportCsv}
+            disabled={exporting || total === 0}
             style={{
-              display: "flex",
+              padding: "9px 16px",
+              fontSize: "13px",
+              fontWeight: 600,
+              color: total === 0 ? "#9AA4B2" : "#FFFFFF",
+              background: total === 0 ? "#EEF1F4" : "#1F2937",
+              border: "none",
+              borderRadius: "8px",
+              cursor: exporting || total === 0 ? "default" : "pointer",
+              whiteSpace: "nowrap",
+              display: "inline-flex",
               alignItems: "center",
-              gap: "14px",
+              gap: "6px",
             }}
           >
-            <span
-              style={{
-                fontSize: "12px",
-                fontWeight: 700,
-                color: "#8A95A5",
-              }}
-            >
-              {total} total
-            </span>
-
-            <button
-              type="button"
-              onClick={exportCsv}
-              disabled={
-                exporting || total === 0
-              }
-              style={{
-                padding: "9px 16px",
-                fontSize: "13px",
-                fontWeight: 600,
-                color:
-                  total === 0
-                    ? "#9AA4B2"
-                    : "#FFFFFF",
-                background:
-                  total === 0
-                    ? "#EEF1F4"
-                    : "#1F2937",
-                border: "none",
-                borderRadius: "8px",
-                cursor:
-                  exporting || total === 0
-                    ? "default"
-                    : "pointer",
-                whiteSpace: "nowrap",
-              }}
-            >
-              {exporting
-                ? "Preparing…"
-                : "Export CSV"}
-            </button>
-          </div>
+            <Download aria-hidden size={15} strokeWidth={2} />
+            {exporting ? "Preparing…" : "Export contacts (CSV)"}
+          </button>
         </div>
 
-      </s-section>
-
-      <s-section>
-
-        <div
-          style={{
-            background: "#FFFFFF",
-            border: "1px solid #D8DEE6",
-            borderRadius: "12px",
-            overflow: "hidden",
-          }}
-        >
-
-          {contacts.length === 0 ? (
-
-            <div
-              style={{
-                padding: "50px 20px",
-                textAlign: "center",
-                color: "#6B7280",
-                fontSize: "13px",
-                lineHeight: 1.6,
-              }}
-            >
-              No submissions yet. Once a popup is
-              live on your storefront (enable the "MQ
-              Popups" app embed under Online Store →
-              Themes → Customize → App embeds) and a
-              shopper submits it, they'll show up
-              here.
-            </div>
-
-          ) : (
-
-            <div style={{ overflowX: "auto" }}>
-            <div style={{ minWidth: "960px" }}>
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns:
-                    `minmax(180px, 1.4fr) minmax(110px, 1fr) minmax(130px, 1fr) ${AUDIT_GRID} 56px`,
-                  gap: "12px",
-                  padding: "11px 18px",
-                  background: "#F8F9FA",
-                  borderBottom:
-                    "1px solid #E7EBEF",
-                  color: "#8A95A5",
-                  fontSize: "10px",
-                  fontWeight: 700,
-                  letterSpacing: "0.06em",
-                  textTransform: "uppercase",
-                }}
-              >
-                <div>Contact</div>
-                <div>Popup</div>
-                <div>Page</div>
-                {AUDIT_HEADERS.map((h) => (
-                  <div key={h}>{h}</div>
-                ))}
-                <div style={stickyEnd("#F8F9FA")}>Actions</div>
-              </div>
-
-              {contacts.map((contact) => (
-                <div
-                  key={contact.id}
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns:
-                      `minmax(180px, 1.4fr) minmax(110px, 1fr) minmax(130px, 1fr) ${AUDIT_GRID} 56px`,
-                    gap: "12px",
-                    alignItems: "center",
-                    padding: "14px 18px",
-                    borderBottom:
-                      "1px solid #EEF1F4",
-                  }}
-                >
-                  <div style={{ minWidth: 0 }}>
-                    <strong
-                      style={{
-                        display: "block",
-                        fontSize: "13px",
-                        color: "#172033",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {contact.email ||
-                        contact.phone ||
-                        "No email captured"}
-                    </strong>
-
-                    {Object.keys(contact.fields)
-                      .length > 0 && (
-                      <span
-                        style={{
-                          display: "block",
-                          marginTop: "3px",
-                          fontSize: "11px",
-                          color: "#8A95A5",
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        {Object.values(
-                          contact.fields,
-                        ).join(" · ")}
-                      </span>
-                    )}
-                  </div>
-
-                  <div
-                    style={{
-                      fontSize: "12px",
-                      color: "#374151",
-                    }}
-                  >
-                    {contact.popupName || "—"}
-                  </div>
-
-                  <div
-                    style={{
-                      fontSize: "12px",
-                      color: "#374151",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    {contact.pageUrl ? (
-                      <a
-                        href={contact.pageUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        style={{ color: "#0B3D66" }}
-                      >
-                        {contact.pageUrl.replace(
-                          /^https?:\/\//,
-                          "",
-                        )}
-                      </a>
-                    ) : (
-                      "—"
-                    )}
-                  </div>
-
-                  {/* A contact is created by a shopper submitting a popup
-                      and is never edited, so "modified" stays empty. */}
-                  <AuditCells
-                    createdBy={contact.popupName ? `Popup: ${contact.popupName}` : "Shopper"}
-                    updatedBy={null}
-                    createdAt={contact.createdAt}
-                    updatedAt={null}
-                  />
-
-                  <div style={stickyEnd("#FFFFFF")}>
-                    <RowActions
-                      name={contact.email || contact.phone || "contact"}
-                      actions={[
-                        {
-                          label: "View journey",
-                          onSelect: () =>
-                            setJourneyFor({
-                              id: contact.id,
-                              title: contact.email || contact.phone || "Contact",
-                            }),
-                        },
-                      ]}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-            </div>
-
-          )}
-
-        </div>
-
+        <PeopleList data={data} onOpenJourney={setJourneyFor} />
       </s-section>
 
       {journeyFor ? (
@@ -533,7 +299,6 @@ export default function Contacts() {
           onClose={() => setJourneyFor(null)}
         />
       ) : null}
-
     </s-page>
   );
 }

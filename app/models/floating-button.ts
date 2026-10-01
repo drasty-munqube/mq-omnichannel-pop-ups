@@ -1,9 +1,13 @@
 /* ============================================================
    FLOATING BUTTON (shared, browser-safe)
 
-   The small button (the teaser) that opens a popup's offer. It is
-   shown first when the campaign's trigger fires, and it comes back
-   when a shopper closes the offer, so they can open it again.
+   The small button (the teaser) that reopens a popup's offer. The
+   popup itself always opens first when the campaign's trigger
+   fires. Once a shopper closes it, the button appears at the chosen
+   spot so they can open the offer again, and on later pages it is
+   all they see while "After they close it" is counting. The
+   button's own × hides it. With "none" nothing appears after the
+   popup is closed.
 
    Chosen per campaign in the campaign wizard (Campaign.floatingButton),
    sent with each campaign to both widget scripts
@@ -40,7 +44,7 @@ export const FLOATING_BUTTON_OPTIONS: {
   {
     value: "none",
     label: "No floating button",
-    help: "The offer opens on its own when the trigger fires. Once a shopper closes it, they cannot open it again on that page.",
+    help: "Nothing is shown after a shopper closes the popup. It opens again only when your target rules allow it.",
     tag: "Fewer signups",
   },
 ];

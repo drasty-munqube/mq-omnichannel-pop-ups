@@ -1,14 +1,12 @@
+import { useState } from "react";
 import type { LoaderFunctionArgs } from "react-router";
 import { useLoaderData, useNavigate, useNavigation, useSearchParams } from "react-router";
+import { ArrowRight, Eye, LayoutTemplate, Percent, Plus, UserPlus, Users } from "lucide-react";
 
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
-import {
-  addCount,
-  conversionRate,
-  emptyCounts,
-  formatRate,
-} from "../models/analytics";
+import { getAnalytics } from "../models/analytics.server";
+import { Breakdown, Stat, TrendChart } from "../components/analytics-charts";
 import {
   color,
   radius,
@@ -29,10 +27,11 @@ import {
 import { useScrollReveal } from "../design/useScrollReveal";
 import { SetupGuide } from "../components/setup-guide";
 import { FunnelChart } from "../components/funnel-chart";
-import { RANGES, normalizeDays } from "../models/analytics";
-import { popupStepFunnel, visitorFunnel } from "../models/funnel";
+import { RANGES, formatRate, normalizeDays, startOfUtcDay } from "../models/analytics";
+import { simpleFunnel } from "../models/funnel";
 import { getFunnelCounts } from "../models/funnel.server";
 import { buildChecklist, themeEditorUrl } from "../models/onboarding";
+import { Select } from "../components/select";
 
 /* ============================================================
    LOADER
@@ -50,23 +49,21 @@ export async function loader({
   const { session } =
     await authenticate.admin(request);
 
-  /* The funnel cards: one campaign or all of them, over 7, 30 or
-     90 days. The campaign id is checked against this shop's
-     campaigns below. */
+  /* The Performance section (what used to be the Analytics
+     page, plus the funnels): one campaign or all of them, over
+     7, 30 or 90 days. The older funnelDays / funnelCampaign
+     names still work for saved links. The campaign id is
+     checked against this shop's campaigns below. */
   const url = new URL(request.url);
-  const funnelDays = normalizeDays(url.searchParams.get("funnelDays"));
-  const funnelParam = url.searchParams.get("funnelCampaign") || "";
+  const days = normalizeDays(
+    url.searchParams.get("days") || url.searchParams.get("funnelDays"),
+  );
+  const campaignParam =
+    url.searchParams.get("campaign") ||
+    url.searchParams.get("funnelCampaign") ||
+    "";
 
-  /* The opt-in rate covers the last 30 days rather than all
-     time. All time would keep quoting a number earned months
-     ago long after the campaigns behind it were changed, which
-     is the least useful version of this figure. */
-
-  const since = new Date();
-  since.setUTCHours(0, 0, 0, 0);
-  since.setUTCDate(since.getUTCDate() - 29);
-
-  const [campaigns, popups, events, setup] =
+  const [campaigns, popups, setup] =
     await Promise.all([
       db.campaign.findMany({
         where: { shop: session.shop },
@@ -78,14 +75,6 @@ export async function loader({
       db.popup.findMany({
         where: { shop: session.shop },
         orderBy: { updatedAt: "desc" },
-      }),
-      db.popupEvent.groupBy({
-        by: ["type"],
-        where: {
-          shop: session.shop,
-          createdAt: { gte: since },
-        },
-        _count: { _all: true },
       }),
       /* For the setup guide: has the storefront sent anything yet
          (proof the app embed is on), is a sending domain verified,
@@ -110,21 +99,21 @@ export async function loader({
 
   const [storefrontEvent, storefrontVisitor, verifiedDomainCount, contactCount] = setup;
 
-  const funnelCampaignId = campaigns.some((c) => c.id === funnelParam) ? funnelParam : null;
-  const funnelCounts = await getFunnelCounts(session.shop, {
-    campaignId: funnelCampaignId,
-    days: funnelDays,
-  });
+  const campaignId = campaigns.some((c) => c.id === campaignParam) ? campaignParam : null;
+  const since = startOfUtcDay(new Date());
+  since.setUTCDate(since.getUTCDate() - (days - 1));
 
-  const eventTotals = emptyCounts();
-
-  for (const row of events) {
-    addCount(
-      eventTotals,
-      row.type,
-      row._count._all,
-    );
-  }
+  const [funnelCounts, analytics, newContactCount] = await Promise.all([
+    getFunnelCounts(session.shop, { campaignId, days }),
+    getAnalytics(session.shop, days, campaignId),
+    db.contact.count({
+      where: {
+        shop: session.shop,
+        createdAt: { gte: since },
+        ...(campaignId ? { campaignId } : {}),
+      },
+    }),
+  ]);
 
   const liveCampaigns = campaigns.filter(
     (campaign) =>
@@ -157,19 +146,15 @@ export async function loader({
     setupSteps,
 
     funnel: {
-      campaignId: funnelCampaignId,
-      days: funnelDays,
+      campaignId,
+      days,
       counts: funnelCounts,
       campaigns: campaigns.map((c) => ({ id: c.id, name: c.name, live: c.status.toLowerCase() === "active" })),
     },
 
-    optInRate: formatRate(
-      conversionRate(
-        eventTotals.view,
-        eventTotals.submit,
-      ),
-    ),
-    optInViews: eventTotals.view,
+    analytics,
+    contactCount,
+    newContactCount,
 
     campaignCount: campaigns.length,
     liveCampaignCount: liveCampaigns.length,
@@ -220,92 +205,6 @@ export async function loader({
 }
 
 /* ============================================================
-   METRIC TILE
-   ============================================================ */
-
-function MetricTile({
-  label,
-  value,
-  caption,
-  tone,
-  available,
-}: {
-  label: string;
-  value: string;
-  caption: string;
-  tone: "primary" | "success" | "accent" | "neutral";
-  available: boolean;
-}) {
-  const valueColor = !available
-    ? color.textSubtle
-    : tone === "success"
-      ? color.successText
-      : tone === "accent"
-        ? color.accentOnSubtle
-        : color.textStrong;
-
-  return (
-    <div
-      data-mq-reveal
-      style={{
-        ...card({ elevation: "raised" }),
-        padding: space[7],
-        display: "flex",
-        flexDirection: "column",
-        gap: space[3],
-        minHeight: "124px",
-        position: "relative",
-        overflow: "hidden",
-      }}
-    >
-      {available && (
-        <span
-          style={{
-            position: "absolute",
-            inset: "0 0 auto 0",
-            height: "3px",
-            background:
-              tone === "success"
-                ? color.successSolid
-                : tone === "accent"
-                  ? color.accent
-                  : color.primary,
-          }}
-        />
-      )}
-
-      <span
-        style={{
-          ...text.bodySm,
-          color: color.textMuted,
-        }}
-      >
-        {label}
-      </span>
-
-      <span
-        style={{
-          ...text.display,
-          fontSize: "28px",
-          color: valueColor,
-        }}
-      >
-        {value}
-      </span>
-
-      <span
-        style={{
-          ...text.caption,
-          color: color.textSubtle,
-        }}
-      >
-        {caption}
-      </span>
-    </div>
-  );
-}
-
-/* ============================================================
    HOME
    ============================================================ */
 
@@ -314,11 +213,11 @@ export default function Index() {
     shop,
     setupSteps,
     funnel,
-    optInRate,
-    optInViews,
+    analytics,
+    contactCount,
+    newContactCount,
     campaignCount,
     liveCampaignCount,
-    popupCount,
     livePopupCount,
     runningNow,
     recentDrafts,
@@ -332,18 +231,19 @@ export default function Index() {
     navigation.state === "loading" &&
     navigation.location?.pathname === "/app";
 
-  const setFunnel = (key: "funnelCampaign" | "funnelDays", value: string) => {
+  const setFunnel = (key: "campaign" | "days", value: string) => {
     const next = new URLSearchParams(searchParams);
+    next.delete("funnelCampaign");
+    next.delete("funnelDays");
     if (value) next.set(key, value);
     else next.delete(key);
     setSearchParams(next, { replace: true, preventScrollReset: true });
   };
 
-  const visitorSteps = visitorFunnel(funnel.counts);
-  const popupSteps = popupStepFunnel(funnel.counts);
-  const funnelScope = funnel.campaignId
-    ? funnel.campaigns.find((c) => c.id === funnel.campaignId)?.name || "This campaign"
-    : "All campaigns";
+  /* One funnel: shown, opened (when the script reports it), signed up. */
+  const funnelSteps = simpleFunnel(funnel.counts);
+  const hasActivity = analytics.totals.view + analytics.totals.submit + analytics.totals.dismiss > 0;
+  const [trend, setTrend] = useState<"views" | "signups">("views");
 
   useScrollReveal();
 
@@ -417,6 +317,7 @@ export default function Index() {
               }
               style={button("secondary", "md")}
             >
+              <LayoutTemplate aria-hidden size={15} strokeWidth={2} />
               Manage popups
             </button>
 
@@ -428,6 +329,7 @@ export default function Index() {
               }
               style={button("primary", "md")}
             >
+              <Plus aria-hidden size={15} strokeWidth={2} />
               Create campaign
             </button>
           </div>
@@ -441,273 +343,190 @@ export default function Index() {
       <SetupGuide shop={shop} steps={setupSteps} />
 
       {/* =====================================================
-          METRIC TILES
-      ===================================================== */}
+          PERFORMANCE
 
-      <div
-        data-mq-stagger
-        style={{
-          display: "grid",
-          gridTemplateColumns:
-            "repeat(auto-fit, minmax(232px, 1fr))",
-          gap: space[5],
-          marginBottom: space[5],
-        }}
-      >
-        <MetricTile
-          label="Live campaigns"
-          value={String(liveCampaignCount)}
-          caption={`${campaignCount} total campaign${
-            campaignCount === 1 ? "" : "s"
-          }`}
-          tone="success"
-          available
-        />
-
-        <MetricTile
-          label="Live popups"
-          value={String(livePopupCount)}
-          caption={`${popupCount} total popup${
-            popupCount === 1 ? "" : "s"
-          }`}
-          tone="primary"
-          available
-        />
-
-        <MetricTile
-          label="Opt-in rate"
-          value={optInRate}
-          caption={
-            optInViews > 0
-              ? `${optInViews} view${
-                  optInViews === 1 ? "" : "s"
-                } in the last 30 days`
-              : "No views recorded yet"
-          }
-          tone="neutral"
-          available={optInViews > 0}
-        />
-
-        <MetricTile
-          label="Attributed revenue"
-          value="—"
-          caption="Needs order tracking"
-          tone="neutral"
-          available={false}
-        />
-      </div>
-
-      {/* =====================================================
-          CAMPAIGN FUNNELS
+          Kept deliberately short: one filter row, four numbers,
+          then the funnel and the daily trend side by side, and
+          the per-campaign table. Everything below the filter
+          follows the campaign and date range chosen there.
       ===================================================== */}
 
       <section
-        aria-labelledby="mq-funnels-title"
-        style={{ marginBottom: space[5] }}
+        aria-labelledby="mq-performance-title"
+        style={{ marginBottom: space[7] }}
       >
         <div
           style={{
             display: "flex",
             justifyContent: "space-between",
-            alignItems: "flex-end",
+            alignItems: "center",
             gap: space[5],
             flexWrap: "wrap",
             marginBottom: space[5],
           }}
         >
-          <div>
-            <h2
-              id="mq-funnels-title"
-              style={{ margin: 0, ...text.h3, color: color.textStrong }}
-            >
-              Campaign funnels
-            </h2>
-            <p style={{ margin: `${space[2]} 0 0`, ...text.bodySm, color: color.textMuted }}>
-              {funnelScope} · last {funnel.days} days
-            </p>
-          </div>
+          <h2
+            id="mq-performance-title"
+            style={{ margin: 0, ...text.h3, color: color.textStrong }}
+          >
+            Performance
+          </h2>
 
           <div style={{ display: "flex", gap: space[3], flexWrap: "wrap", alignItems: "center" }}>
-            <label style={{ display: "flex", alignItems: "center", gap: space[3], ...text.bodySm, color: color.textMuted }}>
-              Campaign
-              <select
-                value={funnel.campaignId || ""}
-                onChange={(event) => setFunnel("funnelCampaign", event.target.value)}
-                style={{
-                  ...input(),
-                  width: "auto",
-                  maxWidth: "260px",
-                  paddingTop: space[3],
-                  paddingBottom: space[3],
-                }}
-              >
-                <option value="">All campaigns</option>
-                {funnel.campaigns.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                    {c.live ? "" : " (not live)"}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <div role="group" aria-label="Date range" style={{ display: "flex", gap: space[2] }}>
-              {RANGES.map((d) => (
-                <button
-                  key={d}
-                  type="button"
-                  aria-pressed={funnel.days === d}
-                  onClick={() => setFunnel("funnelDays", d === 30 ? "" : String(d))}
-                  style={button(funnel.days === d ? "primary" : "secondary", "sm")}
-                >
-                  {d} days
-                </button>
+            <Select
+              aria-label="Campaign"
+              value={funnel.campaignId || ""}
+              onChange={(event) => setFunnel("campaign", event.target.value)}
+              style={{
+                ...input(),
+                width: "auto",
+                maxWidth: "240px",
+                paddingTop: space[3],
+                paddingBottom: space[3],
+              }}
+            >
+              <option value="">All campaigns</option>
+              {funnel.campaigns.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                  {c.live ? "" : " (not live)"}
+                </option>
               ))}
+            </Select>
+
+            <div
+              role="group"
+              aria-label="Date range"
+              style={{
+                display: "inline-flex",
+                padding: "3px",
+                borderRadius: radius.md,
+                background: color.surfaceSunken,
+                border: `1px solid ${color.border}`,
+              }}
+            >
+              {RANGES.map((d) => {
+                const active = funnel.days === d;
+                return (
+                  <button
+                    key={d}
+                    type="button"
+                    aria-pressed={active}
+                    onClick={() => setFunnel("days", d === 30 ? "" : String(d))}
+                    style={{
+                      padding: `${space[2]} ${space[5]}`,
+                      border: 0,
+                      borderRadius: radius.sm,
+                      background: active ? color.surface : "transparent",
+                      boxShadow: active ? "0 1px 2px rgba(23, 32, 51, 0.12)" : "none",
+                      color: active ? color.textStrong : color.textMuted,
+                      fontSize: "12px",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                    }}
+                  >
+                    {d} days
+                  </button>
+                );
+              })}
             </div>
           </div>
         </div>
 
         <div
-          className="mq-grid-halves"
           aria-busy={funnelLoading}
-          style={{ gap: space[5], opacity: funnelLoading ? 0.6 : 1, transition: "opacity 150ms" }}
+          style={{ opacity: funnelLoading ? 0.6 : 1, transition: "opacity 150ms" }}
         >
-          <div style={{ ...card({ elevation: "raised" }), padding: space[7] }}>
-            <h3 style={{ margin: 0, ...text.h4, color: color.textStrong }}>
-              Visitor funnel
-            </h3>
-            <p style={{ margin: `${space[2]} 0 ${space[7]}`, ...text.bodySm, color: color.textMuted }}>
-              How many shoppers saw the popup, and how many left their email or phone number.
-            </p>
-            <FunnelChart label="Visitor funnel" steps={visitorSteps} compare="first" />
-            {funnel.counts.unflaggedSubmits > 0 ? (
-              <p style={{ margin: `${space[6]} 0 0`, ...text.caption, color: color.textMuted }}>
-                {funnel.counts.unflaggedSubmits} earlier signup
-                {funnel.counts.unflaggedSubmits === 1 ? " is" : "s are"} not split into email and phone,
-                because they came in before this was recorded.
-              </p>
-            ) : null}
-          </div>
-
-          <div style={{ ...card({ elevation: "raised" }), padding: space[7] }}>
-            <h3 style={{ margin: 0, ...text.h4, color: color.textStrong }}>
-              Popup steps
-            </h3>
-            <p style={{ margin: `${space[2]} 0 ${space[7]}`, ...text.bodySm, color: color.textMuted }}>
-              How many shoppers reached each step of the popup, and the share that moved on from the step before.
-            </p>
-            <FunnelChart label="Popup steps" steps={popupSteps} compare="previous" />
-            {funnel.counts.opens === 0 && funnel.counts.submits > 0 ? (
-              <p style={{ margin: `${space[6]} 0 0`, ...text.caption, color: color.textMuted }}>
-                Offer opens are counted from this update on, so older signups show no Step 2.
-              </p>
-            ) : null}
-          </div>
-        </div>
-      </section>
-
-      {/* =====================================================
-          INSIGHTS + RUNNING NOW
-      ===================================================== */}
-
-      <div
-        className="mq-grid-sidebar"
-        style={{
-          gap: space[5],
-          marginBottom: space[5],
-        }}
-      >
-
-        {/* ---------------- INSIGHTS ---------------- */}
-
-        <div
-          data-mq-reveal
-          style={card({ elevation: "raised" })}
-        >
+          {/* FOUR NUMBERS */}
           <div
             style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: space[5],
-              padding: `${space[6]} ${space[7]}`,
-              borderBottom: `1px solid ${color.borderSubtle}`,
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))",
+              gap: space[4],
+              marginBottom: space[5],
             }}
           >
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: space[4],
-              }}
-            >
-              <span
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  width: "26px",
-                  height: "26px",
-                  borderRadius: radius.md,
-                  background: color.accentSubtle,
-                  color: color.accentOnSubtle,
-                  fontSize: "13px",
-                  flexShrink: 0,
-                }}
-              >
-                ✦
-              </span>
-
-              <h2
-                style={{
-                  margin: 0,
-                  ...text.h3,
-                  color: color.textStrong,
-                }}
-              >
-                This week, from MQ Brain
-              </h2>
-            </div>
-
-            <span style={badge("accent")}>
-              NOT CONNECTED
-            </span>
+            <Stat icon={Eye} label="Views" value={analytics.totals.view.toLocaleString()} note="Popup reached a screen" />
+            <Stat icon={UserPlus} label="Signups" value={analytics.totals.submit.toLocaleString()} note="Left an email or phone" />
+            <Stat icon={Percent} label="Conversion" value={formatRate(analytics.rate)} note="Signups out of views" />
+            <Stat icon={Users} label="New contacts" value={newContactCount.toLocaleString()} note={`${contactCount.toLocaleString()} contact${contactCount === 1 ? "" : "s"} in total`} />
           </div>
 
-          <div style={emptyState()}>
-            <span
+          {!hasActivity ? (
+            <div
               style={{
-                fontSize: "22px",
-                color: color.textSubtle,
-              }}
-            >
-              ✦
-            </span>
-
-            <strong
-              style={{
-                ...text.h4,
-                color: color.textStrong,
-              }}
-            >
-              No insights yet
-            </strong>
-
-            <p
-              style={{
-                margin: 0,
-                maxWidth: "420px",
+                ...card({ elevation: "flat" }),
+                padding: `${space[8]} ${space[6]}`,
+                textAlign: "center",
                 ...text.body,
                 color: color.textMuted,
               }}
             >
-              Weekly recommendations appear once
-              campaigns start collecting impression
-              and conversion data from your
-              storefront.
-            </p>
-          </div>
+              Nothing recorded in the last {funnel.days} days yet. Numbers show up once a campaign and its popup are
+              both live and shoppers visit your store.
+            </div>
+          ) : (
+            <>
+              {/* FUNNEL + TREND */}
+              <div className="mq-grid-halves" style={{ gap: space[5], marginBottom: space[5] }}>
+                <div style={{ ...card({ elevation: "raised" }), padding: space[7] }}>
+                  <h3 style={{ margin: `0 0 ${space[6]}`, ...text.h4, color: color.textStrong }}>Funnel</h3>
+                  <FunnelChart label="Funnel" steps={funnelSteps} compare="previous" />
+                  <p style={{ margin: `${space[6]} 0 0`, ...text.caption, color: color.textMuted }}>
+                    {funnel.counts.withEmail.toLocaleString()} with email · {funnel.counts.withPhone.toLocaleString()} with phone
+                    {funnel.counts.unflaggedSubmits > 0
+                      ? ` · ${funnel.counts.unflaggedSubmits.toLocaleString()} older signup${funnel.counts.unflaggedSubmits === 1 ? "" : "s"} from before email and phone were recorded`
+                      : ""}
+                    . Tests from the theme editor and previews are not counted.
+                  </p>
+                </div>
+
+                <TrendChart
+                  title={trend === "views" ? "Views per day" : "Signups per day"}
+                  color={trend === "views" ? "#2a78d6" : "#eb6834"}
+                  series={analytics.daily}
+                  valueOf={(point) => (trend === "views" ? point.views : point.submits)}
+                  actions={
+                    <div role="group" aria-label="Chart" style={{ display: "inline-flex", gap: space[2] }}>
+                      {(["views", "signups"] as const).map((key) => (
+                        <button
+                          key={key}
+                          type="button"
+                          aria-pressed={trend === key}
+                          onClick={() => setTrend(key)}
+                          style={button(trend === key ? "secondary" : "tertiary", "sm")}
+                        >
+                          {key === "views" ? <Eye aria-hidden size={15} strokeWidth={2} /> : <UserPlus aria-hidden size={15} strokeWidth={2} />}
+                          {key === "views" ? "Views" : "Signups"}
+                        </button>
+                      ))}
+                    </div>
+                  }
+                />
+              </div>
+
+              {/* ONE TABLE, only when looking at all campaigns */}
+              {funnel.campaignId ? null : (
+                <Breakdown
+                  heading="Campaigns"
+                  empty="No campaign has been seen in this period."
+                  rows={analytics.byCampaign}
+                />
+              )}
+            </>
+          )}
         </div>
+      </section>
+
+      {/* =====================================================
+          RUNNING NOW
+      ===================================================== */}
+
+      <div
+        style={{
+          marginBottom: space[5],
+        }}
+      >
 
         {/* ---------------- RUNNING NOW ---------------- */}
 
@@ -747,7 +566,8 @@ export default function Index() {
                 padding: `0 ${space[3]}`,
               }}
             >
-              All campaigns →
+              All campaigns
+              <ArrowRight aria-hidden size={15} strokeWidth={2} />
             </button>
           </div>
 
@@ -942,90 +762,6 @@ export default function Index() {
         </div>
 
       </div>
-
-      {/* =====================================================
-          LIVE ACTIVITY
-      ===================================================== */}
-
-      <div
-        data-mq-reveal
-        style={{
-          ...card({ elevation: "raised" }),
-          marginBottom: space[7],
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: space[5],
-            padding: `${space[6]} ${space[7]}`,
-            borderBottom: `1px solid ${color.borderSubtle}`,
-          }}
-        >
-          <h2
-            style={{
-              margin: 0,
-              ...text.h3,
-              color: color.textStrong,
-            }}
-          >
-            Live activity
-          </h2>
-
-          <span style={badge("neutral")}>
-            NO EVENT DATA
-          </span>
-        </div>
-
-        <div
-          style={{
-            ...emptyState(),
-            minHeight: "180px",
-          }}
-        >
-          <strong
-            style={{
-              ...text.h4,
-              color: color.textStrong,
-            }}
-          >
-            Nothing to show yet
-          </strong>
-
-          <p
-            style={{
-              margin: 0,
-              maxWidth: "480px",
-              ...text.body,
-              color: color.textMuted,
-            }}
-          >
-            Signups, orders and recovered carts will
-            stream here once popups are rendering on
-            your storefront and events are being
-            recorded.
-          </p>
-        </div>
-      </div>
-
-      {/* =====================================================
-          FOOTNOTE
-      ===================================================== */}
-
-      <p
-        style={{
-          margin: `0 0 ${space[7]}`,
-          ...text.bodySm,
-          color: color.textSubtle,
-        }}
-      >
-        Campaign and popup counts are live from your
-        database. Revenue, opt-in and activity metrics
-        stay empty until storefront tracking is in
-        place.
-      </p>
 
     </s-page>
   );

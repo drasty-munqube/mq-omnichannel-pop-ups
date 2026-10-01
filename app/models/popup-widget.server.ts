@@ -13,6 +13,7 @@ import {
   resolveContact,
   type RequestInfo,
 } from "./visitors.server";
+import { isTestPageUrl } from "./test-traffic";
 
 /* ============================================================
    SHARED WIDGET DATA ACCESS
@@ -223,6 +224,9 @@ export type SubmissionInput = {
   phone?: string;
   fields?: Record<string, string>;
   pageUrl?: string;
+  /* Sent from the theme editor or a preview link. Saved as a
+     contact, but left out of the numbers on Home. */
+  test?: boolean;
 };
 
 export async function saveSubmission(
@@ -232,6 +236,11 @@ export async function saveSubmission(
   info: RequestInfo = {},
 ) {
   const fields = body.fields || {};
+
+  /* A test from the theme editor or a preview. Older widget
+     scripts do not send the flag, so the page address decides
+     too (see test-traffic.ts). */
+  const isTest = body.test === true || isTestPageUrl(body.pageUrl);
 
   const email =
     body.email ||
@@ -257,7 +266,7 @@ export async function saveSubmission(
   /* Link the anonymous visitor to this contact and hand the
      contact the visitor's earlier events. Never allowed to fail
      the signup itself. */
-  if (body.anonymousId) {
+  if (body.anonymousId && !isTest) {
     try {
       await identifyVisitor(
         shop,
@@ -293,7 +302,7 @@ export async function saveSubmission(
      can be lost to a navigation, blocked, or replayed; a Contact
      row and its matching event are written by the same call. */
 
-  await recordEvent(
+  if (!isTest) await recordEvent(
     shop,
     source,
     {
@@ -408,6 +417,12 @@ export async function recordEvent(
   const pageUrl = input.pageUrl
     ? String(input.pageUrl).slice(0, MAX_PAGE_URL)
     : null;
+
+  /* A merchant testing their own popup is not a shopper. Newer
+     scripts do not send these at all; older ones still might. */
+  if (isTestPageUrl(pageUrl)) {
+    return false;
+  }
 
   try {
     await db.popupEvent.create({

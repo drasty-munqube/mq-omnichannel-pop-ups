@@ -14,9 +14,12 @@ import { useEffect } from "react";
 import { useFetcher } from "react-router";
 
 import { AuditDate } from "./audit-cells";
-import { badge, button, modalOverlay, modalPanel, skeleton } from "../design/styles";
+import { RefLink } from "./ref-link";
+import { badge, modalOverlay, modalPanel, skeleton } from "../design/styles";
 import { color, fontFamily, fontWeight, radius, space, text, zIndex } from "../design/tokens";
 import { eventLabel } from "../models/journey-events";
+import { X } from "lucide-react";
+import { IconButton } from "./icon-button";
 
 type Journey = {
   contact: { id: string; email: string | null; phone: string | null; createdAt: string; shopifyCustomerId: string | null };
@@ -83,13 +86,16 @@ export function ContactJourneyDialog({ contactId, title, onClose }: { contactId:
         aria-labelledby="mq-journey-title"
         style={{ ...modalPanel(), maxWidth: "720px", width: "calc(100% - 32px)", maxHeight: "calc(100vh - 64px)", display: "flex", flexDirection: "column" }}
       >
-        <div style={{ padding: `${space[6]} ${space[7]}`, borderBottom: `1px solid ${color.borderSubtle}` }}>
+        <div style={{ padding: `${space[6]} ${space[7]}`, borderBottom: `1px solid ${color.borderSubtle}`, display: "flex", gap: space[5], alignItems: "flex-start" }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
           <h3 id="mq-journey-title" style={{ margin: 0, ...text.h3, color: color.textStrong, overflowWrap: "anywhere" }}>
             Journey · {title}
           </h3>
           <p style={{ margin: `${space[2]} 0 0`, ...text.bodySm, color: color.textMuted }}>
             Visits on pages with a live campaign, signups and discount emails for this contact, oldest first.
           </p>
+          </div>
+          <IconButton icon={X} label="Close" variant="tertiary" onClick={onClose} />
         </div>
 
         <div style={{ padding: space[7], overflowY: "auto", display: "grid", gap: space[7] }}>
@@ -136,7 +142,11 @@ export function ContactJourneyDialog({ contactId, title, onClose }: { contactId:
                           <div style={{ color: color.textMuted, overflowWrap: "anywhere" }}>
                             {v.utmSource ? `UTM: ${[v.utmSource, v.utmMedium, v.utmCampaign].filter(Boolean).join(" / ")}` : null}
                             {v.utmSource && v.referrer ? " · " : null}
-                            {v.referrer ? `Came from ${v.referrer}` : null}
+                            {v.referrer ? (
+                              <>
+                                Came from <RefLink url={v.referrer} short />
+                              </>
+                            ) : null}
                           </div>
                         ) : null}
                       </li>
@@ -186,8 +196,8 @@ export function ContactJourneyDialog({ contactId, title, onClose }: { contactId:
                               <div style={{ ...text.bodySm, color: color.text, marginTop: space[2], overflowWrap: "anywhere" }}>{e.detail}</div>
                             ) : null}
                             {e.pageUrl ? (
-                              <div title={e.pageUrl} style={{ ...text.bodySm, color: color.textMuted, marginTop: space[2], overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                                {e.pageUrl.replace(/^https?:\/\//, "")}
+                              <div style={{ ...text.bodySm, marginTop: space[2], minWidth: 0, display: "flex" }}>
+                                <RefLink url={e.pageUrl} short nowrap />
                               </div>
                             ) : null}
                           </div>
@@ -202,11 +212,6 @@ export function ContactJourneyDialog({ contactId, title, onClose }: { contactId:
           )}
         </div>
 
-        <div style={{ display: "flex", justifyContent: "flex-end", padding: `${space[5]} ${space[7]}`, borderTop: `1px solid ${color.borderSubtle}`, background: color.surfaceSunken }}>
-          <button type="button" style={button("secondary", "md")} onClick={onClose}>
-            Close
-          </button>
-        </div>
       </div>
     </div>
   );

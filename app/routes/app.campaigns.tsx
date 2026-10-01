@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { ArrowLeft, Check, ChevronLeft, ChevronRight, EllipsisVertical, Hash, InfinityIcon, LayoutTemplate, Monitor, Plus, Repeat1, Save, Search, Smartphone, Sparkles, Tablet, X } from "lucide-react";
 import type {
   ActionFunctionArgs,
   LoaderFunctionArgs,
@@ -33,6 +34,7 @@ import {
   CodeBlock,
   CopyButton,
 } from "../components/copy-snippet";
+import { SearchField } from "../components/search-field";
 
 
 /* ------------------------------------------------------------
@@ -2271,15 +2273,19 @@ export default function Campaigns() {
                 fontSize: "13px",
                 fontWeight: 600,
                 cursor: "pointer",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
               }}
             >
-              ✦ Draft a campaign
+              <Sparkles aria-hidden size={15} strokeWidth={2} />
+              Draft a campaign
             </button>
 
             <button
               type="button"
               onClick={openChooser}
-              style={{
+              style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "6px", 
                 border: "none",
                 background: "#0B3D66",
                 color: "#FFFFFF",
@@ -2290,6 +2296,7 @@ export default function Campaigns() {
                 cursor: "pointer",
               }}
             >
+              <Plus aria-hidden size={15} strokeWidth={2} />
               Create campaign
             </button>
 
@@ -2696,17 +2703,18 @@ export default function Campaigns() {
               <button
                 type="button"
                 onClick={closeChooser}
+                aria-label="Close"
                 style={{
                   border: "none",
                   background: "transparent",
                   color: "#94A0AF",
-                  fontSize: "27px",
                   lineHeight: 1,
                   cursor: "pointer",
-                  padding: "0 3px",
+                  padding: "3px",
+                  display: "inline-flex",
                 }}
               >
-                ×
+                <X aria-hidden size={22} strokeWidth={2} />
               </button>
 
             </div>
@@ -2759,11 +2767,10 @@ export default function Campaigns() {
                       alignItems: "center",
                       justifyContent: "center",
                       color: "#0B3D66",
-                      fontSize: "22px",
                       marginBottom: "18px",
                     }}
                   >
-                    ▣
+                    <LayoutTemplate aria-hidden size={22} strokeWidth={2} />
                   </div>
 
                   <h3
@@ -2893,9 +2900,14 @@ export default function Campaigns() {
                         fontSize: "13px",
                         fontWeight: 600,
                         cursor: "pointer",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: "6px",
                       }}
                     >
-                      ✦ Draft with AI
+                      <Sparkles aria-hidden size={15} strokeWidth={2} />
+                      Draft with AI
                     </button>
 
                   </div>
@@ -3035,15 +3047,17 @@ export default function Campaigns() {
               <button
                 type="button"
                 onClick={closeWizard}
+                aria-label="Close"
                 style={{
                   border: "none",
                   background: "transparent",
                   color: "#94A0AF",
-                  fontSize: "26px",
                   cursor: "pointer",
+                  padding: "3px",
+                  display: "inline-flex",
                 }}
               >
-                ×
+                <X aria-hidden size={22} strokeWidth={2} />
               </button>
 
             </div>
@@ -3151,7 +3165,7 @@ export default function Campaigns() {
                               : "none",
                           }}
                         >
-                          {isDone ? "✓" : stepNumber}
+                          {isDone ? <Check aria-hidden size={14} strokeWidth={3} /> : stepNumber}
                         </div>
 
                         <span
@@ -3647,11 +3661,12 @@ export default function Campaigns() {
                           transform:
                             "translateY(-50%)",
                           color: "#8D98A7",
-                          fontSize: "14px",
+                          display: "flex",
+                pointerEvents: "none",
                         }}
                       >
-                        ⌕
-                      </span>
+                <Search aria-hidden size={15} strokeWidth={2} />
+              </span>
 
                       <input
                         value={popupSearch}
@@ -3942,6 +3957,8 @@ export default function Campaigns() {
                       >
 
                         <button
+                    aria-label="Previous page"
+                    title="Previous page"
                           type="button"
                           disabled={
                             popupSafePage === 1
@@ -3959,17 +3976,18 @@ export default function Campaigns() {
                                 ? "#C4CBD4"
                                 : "#374151",
                             borderRadius: "7px",
-                            padding: "7px 12px",
+                            padding: "7px 8px",
                             fontSize: "12px",
                             fontWeight: 600,
+                    display: "inline-flex",
                             cursor:
                               popupSafePage === 1
                                 ? "not-allowed"
                                 : "pointer",
                           }}
                         >
-                          Previous
-                        </button>
+                    <ChevronLeft aria-hidden size={15} strokeWidth={2} />
+                  </button>
 
                         {Array.from(
                           { length: popupTotalPages },
@@ -4007,6 +4025,8 @@ export default function Campaigns() {
                         ))}
 
                         <button
+                    aria-label="Next page"
+                    title="Next page"
                           type="button"
                           disabled={
                             popupSafePage ===
@@ -4029,9 +4049,10 @@ export default function Campaigns() {
                                 ? "#C4CBD4"
                                 : "#374151",
                             borderRadius: "7px",
-                            padding: "7px 12px",
+                            padding: "7px 8px",
                             fontSize: "12px",
                             fontWeight: 600,
+                    display: "inline-flex",
                             cursor:
                               popupSafePage ===
                               popupTotalPages
@@ -4039,8 +4060,8 @@ export default function Campaigns() {
                                 : "pointer",
                           }}
                         >
-                          Next
-                        </button>
+                    <ChevronRight aria-hidden size={15} strokeWidth={2} />
+                  </button>
 
                       </div>
 
@@ -4822,17 +4843,20 @@ export default function Campaigns() {
                             value:
                               "unlimited" as const,
                             label: "No limit",
+                            icon: InfinityIcon,
                             text: "Show it every time the trigger fires.",
                           },
                           {
                             value: "once" as const,
                             label: "Only once",
+                            icon: Repeat1,
                             text: "Show it a single time per visitor.",
                           },
                           {
                             value:
                               "limited" as const,
                             label: "A set number",
+                            icon: Hash,
                             text: "Show it up to a chosen number of times.",
                           },
                         ]
@@ -4868,11 +4892,14 @@ export default function Campaigns() {
                         >
                           <strong
                             style={{
-                              display: "block",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "7px",
                               color: "#172033",
                               fontSize: "14px",
                             }}
                           >
+                            <mode.icon aria-hidden size={16} strokeWidth={2} color="#0B3D66" />
                             {mode.label}
                           </strong>
 
@@ -5114,7 +5141,9 @@ export default function Campaigns() {
                         : ""}
                       . To see it again, use{" "}
                       <strong>Preview on store</strong> in the
-                      campaign&apos;s ⋮ menu, or open your store
+                      campaign&apos;s{" "}
+                      <EllipsisVertical aria-label="actions" size={14} strokeWidth={2} style={{ verticalAlign: "-2px" }} />{" "}
+                      menu, or open your store
                       with <code>?mq_reset=1</code> at the end of
                       the address to clear your browser&apos;s
                       memory. Add <code>?mq_debug=1</code> to see
@@ -5172,18 +5201,21 @@ export default function Campaigns() {
                         [
                           {
                             value: "desktop",
+                            icon: Monitor,
                             label:
                               "Desktop browsers",
                             hint: "1024px and wider",
                           },
                           {
                             value: "tablet",
+                            icon: Tablet,
                             label:
                               "Tablet browsers",
                             hint: "768px to 1023px",
                           },
                           {
                             value: "mobile",
+                            icon: Smartphone,
                             label:
                               "Mobile browsers",
                             hint: "Under 768px",
@@ -5231,13 +5263,17 @@ export default function Campaigns() {
                               <span
                                 style={{
                                   display:
-                                    "block",
+                                    "flex",
+                                  alignItems:
+                                    "center",
+                                  gap: "6px",
                                   fontSize:
                                     "13px",
                                   color: "#172033",
                                   fontWeight: 600,
                                 }}
                               >
+                                <device.icon aria-hidden size={15} strokeWidth={2} color="#0B3D66" />
                                 {device.label}
                               </span>
 
@@ -5313,10 +5349,9 @@ export default function Campaigns() {
                       fontSize: "14px",
                     }}
                   >
-                    The floating button is the small tab that
-                    opens your offer. Shoppers see it first, and
-                    it stays on screen after they close the
-                    offer, so they can open it again later.
+                    Shoppers always see the popup first. If they
+                    close it, this small button appears where you
+                    choose, so they can open the offer again later.
                   </p>
 
                   <div style={{ marginTop: "10px" }}>
@@ -5472,23 +5507,34 @@ export default function Campaigns() {
                         lineHeight: 1.5,
                       }}
                     >
-                      <strong>Note:</strong> the button uses the
-                      teaser text and colors from your popup, and a
-                      shopper can hide it with its × button.{" "}
-                      {frequencyMode === "unlimited"
-                        ? "Your campaign is set to No limit (step 3), so it comes back on the next page, even after a signup."
-                        : `It then stays hidden for ${
-                            reshowDismissedDays > 0
-                              ? `${reshowDismissedDays} day${reshowDismissedDays === 1 ? "" : "s"}`
-                              : "good"
-                          } ("After they close it" in step 3). After a signup it stays hidden for ${
-                            reshowCollectedDays > 0
-                              ? `${reshowCollectedDays} day${reshowCollectedDays === 1 ? "" : "s"}`
-                              : "good"
-                          } ("After they submit").`}
+                      <strong>Note:</strong>{" "}
                       {floatingButton === "none"
-                        ? " With no floating button, the offer opens straight away when the trigger fires."
-                        : null}
+                        ? `The popup opens by itself when the trigger fires, and every rule from step 3 (pages, devices, audience, how often) applies to it. When a shopper closes it, nothing else appears. ${
+                            frequencyMode === "unlimited"
+                              ? "Your campaign is set to No limit, so the popup opens again on the next page, even after a shopper closes it or signs up."
+                              : `It stays hidden for ${
+                                    reshowDismissedDays > 0
+                                      ? `${reshowDismissedDays} day${reshowDismissedDays === 1 ? "" : "s"}`
+                                      : "good"
+                                  } after they close it ("After they close it"), and for ${
+                                    reshowCollectedDays > 0
+                                      ? `${reshowCollectedDays} day${reshowCollectedDays === 1 ? "" : "s"}`
+                                      : "good"
+                                  } after a signup ("After they submit").`
+                          }`
+                        : `The popup opens by itself when the trigger fires. When a shopper closes it, the button appears here, using the teaser text and colors from your popup. ${
+                            frequencyMode === "unlimited"
+                              ? "Your campaign is set to No limit (step 3), so the popup opens by itself again on the next page."
+                              : `For ${
+                                    reshowDismissedDays > 0
+                                      ? `${reshowDismissedDays} day${reshowDismissedDays === 1 ? "" : "s"}`
+                                      : "good"
+                                  } after they close it ("After they close it" in step 3), later pages show only the button, not the popup. The button's close icon hides it for that time too. After a signup, both stay hidden for ${
+                                    reshowCollectedDays > 0
+                                      ? `${reshowCollectedDays} day${reshowCollectedDays === 1 ? "" : "s"}`
+                                      : "good"
+                                  } ("After they submit").`
+                          }`}
                     </div>
                   </div>
                 </div>
@@ -6001,7 +6047,7 @@ export default function Campaigns() {
                     </div>
 
                     {discounts.length > 0 && (
-                      <input
+                      <SearchField
                         value={discountSearch}
                         onChange={(e) =>
                           setDiscountSearch(
@@ -6981,8 +7027,12 @@ export default function Campaigns() {
                       ? "not-allowed"
                       : "pointer",
                     opacity: saving ? 0.6 : 1,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "6px",
                   }}
                 >
+                  <ArrowLeft aria-hidden size={15} strokeWidth={2} />
                   Back
                 </button>
 
@@ -7008,7 +7058,7 @@ export default function Campaigns() {
                     type="button"
                     onClick={handleSaveDraft}
                     disabled={saving}
-                    style={{
+                    style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "6px", 
                       border:
                         "1px solid #C9D5E2",
                       background: "#FFFFFF",
@@ -7023,6 +7073,7 @@ export default function Campaigns() {
                       opacity: saving ? 0.6 : 1,
                     }}
                   >
+                    <Save aria-hidden size={15} strokeWidth={2} />
                     Save as draft
                   </button>
 

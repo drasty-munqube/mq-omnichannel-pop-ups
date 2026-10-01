@@ -18,6 +18,7 @@ import { DEFAULT_REGION, DOMAIN_REGIONS, normalizeDomainInput } from "../models/
 import { addShopDomain } from "../models/email-domains.server";
 import { isResendConfigured } from "../models/resend-domains.server";
 import { authenticate } from "../shopify.server";
+import { Plus } from "lucide-react";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   await authenticate.admin(request);
@@ -156,6 +157,7 @@ export default function AddDomainPage() {
               disabled={!configured || submitting}
               style={button("primary", "md", { disabled: !configured || submitting })}
             >
+              <Plus aria-hidden size={15} strokeWidth={2} />
               {submitting ? "Adding…" : "Add domain"}
             </button>
           </div>

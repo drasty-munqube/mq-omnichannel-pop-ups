@@ -15,9 +15,35 @@
 
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { createPortal } from "react-dom";
+import { Copy, EllipsisVertical, Eye, ListOrdered, Pencil, Route, Trash2, User, type LucideIcon } from "lucide-react";
 import { color, fontWeight, radius, shadow, space, text, zIndex } from "../design/tokens";
 
-export type RowAction = { label: string; onSelect: () => void; danger?: boolean; disabled?: boolean };
+export type RowAction = {
+  label: string;
+  onSelect: () => void;
+  danger?: boolean;
+  disabled?: boolean;
+  /* Drawn before the label. Left out, it is picked from the label. */
+  icon?: LucideIcon;
+};
+
+/* The icon for the usual menu labels, including their busy
+   versions ("Copying…", "Deleting…"). */
+const ICON_BY_LABEL: [RegExp, LucideIcon][] = [
+  [/^edit/i, Pencil],
+  [/^(duplicate|copying)/i, Copy],
+  [/^(delete|deleting|remove)/i, Trash2],
+  [/^preview/i, Eye],
+  [/journey/i, Route],
+  [/^view (visitor|latest visit)/i, User],
+  [/timeline/i, ListOrdered],
+  [/^(view|open)/i, Eye],
+];
+
+function iconFor(action: RowAction): LucideIcon | null {
+  if (action.icon) return action.icon;
+  return ICON_BY_LABEL.find(([pattern]) => pattern.test(action.label))?.[1] ?? null;
+}
 
 export function RowActions({ name, actions }: { name: string; actions: RowAction[] }) {
   const [open, setOpen] = useState(false);
@@ -118,11 +144,7 @@ export function RowActions({ name, actions }: { name: string; actions: RowAction
         onMouseEnter={(e) => (e.currentTarget.style.background = color.surfaceSunken)}
         onMouseLeave={(e) => { if (!open) e.currentTarget.style.background = "transparent"; }}
       >
-        <svg aria-hidden width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-          <circle cx="12" cy="5" r="1.8" />
-          <circle cx="12" cy="12" r="1.8" />
-          <circle cx="12" cy="19" r="1.8" />
-        </svg>
+        <EllipsisVertical aria-hidden size={18} strokeWidth={2} />
       </button>
 
       {open && typeof document !== "undefined" ? createPortal(
@@ -156,7 +178,9 @@ export function RowActions({ name, actions }: { name: string; actions: RowAction
                 action.onSelect();
               }}
               style={{
-                display: "block",
+                display: "flex",
+                alignItems: "center",
+                gap: space[4],
                 width: "100%",
                 textAlign: "left",
                 border: 0,
@@ -174,6 +198,10 @@ export function RowActions({ name, actions }: { name: string; actions: RowAction
               onFocus={(e) => (e.currentTarget.style.background = action.danger ? color.dangerSurface : color.surfaceSunken)}
               onBlur={(e) => (e.currentTarget.style.background = "transparent")}
             >
+              {(() => {
+                const Icon = iconFor(action);
+                return Icon ? <Icon aria-hidden size={16} strokeWidth={2} style={{ flexShrink: 0, opacity: 0.85 }} /> : null;
+              })()}
               {action.label}
             </button>
           ))}

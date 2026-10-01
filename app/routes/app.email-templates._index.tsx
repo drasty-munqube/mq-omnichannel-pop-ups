@@ -1,7 +1,7 @@
 /* ============================================================
    EMAIL TEMPLATES (list page)
 
-   Its own page in the app menu, below Analytics.
+   Its own page in the app menu.
 
    GET   loader            this shop's templates
    POST  intent=duplicate  copy one as a new draft
@@ -43,6 +43,7 @@ import { AUDIT_GRID, AUDIT_HEADERS } from "../models/audit-format";
 import { AuditCells, stickyEnd } from "../components/audit-cells";
 import { authenticate } from "../shopify.server";
 import { RowActions } from "../components/row-actions";
+import { Plus } from "lucide-react";
 
 
 export async function loader({ request }: LoaderFunctionArgs) {
@@ -121,7 +122,8 @@ function EmailTemplatesSection() {
           Reusable emails for this store, such as the discount email sent after a popup.
         </span>
         <Link to="/app/email-templates/new" style={{ ...button("primary", "md"), textDecoration: "none" }}>
-          + Create template
+          <Plus aria-hidden size={15} strokeWidth={2} />
+          Create template
         </Link>
       </div>
 

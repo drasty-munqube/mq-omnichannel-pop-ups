@@ -10,6 +10,8 @@
 
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
+import { Check, Compass, ExternalLink, X } from "lucide-react";
+import { IconButton } from "./icon-button";
 
 import { badge, button, card, interactive } from "../design/styles";
 import { color, fontWeight, radius, space, text } from "../design/tokens";
@@ -22,7 +24,7 @@ import {
   type SetupStep,
 } from "../models/onboarding";
 
-function Check({ done }: { done: boolean }) {
+function StepMark({ done }: { done: boolean }) {
   return (
     <span
       aria-hidden
@@ -40,9 +42,7 @@ function Check({ done }: { done: boolean }) {
       }}
     >
       {done ? (
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round">
-          <path d="m5 12.5 4.5 4.5L19 7" />
-        </svg>
+        <Check size={13} strokeWidth={3} />
       ) : null}
     </span>
   );
@@ -71,6 +71,7 @@ export function SetupGuide({ shop, steps }: { shop: string; steps: SetupStep[] }
     return (
       <div style={{ display: "flex", justifyContent: "flex-end", gap: space[5], marginBottom: space[5] }}>
         <button type="button" onClick={openTour} style={{ ...button("tertiary", "sm"), color: color.textMuted }}>
+          <Compass aria-hidden size={15} strokeWidth={2} />
           Take the tour
         </button>
         <button type="button" onClick={() => hide(false)} style={{ ...button("tertiary", "sm"), color: color.textMuted }}>
@@ -98,11 +99,10 @@ export function SetupGuide({ shop, steps }: { shop: string; steps: SetupStep[] }
           </div>
           <div style={{ display: "flex", gap: space[3], alignItems: "center" }}>
             <button type="button" onClick={openTour} style={button("secondary", "sm")}>
+              <Compass aria-hidden size={15} strokeWidth={2} />
               Take the tour
             </button>
-            <button type="button" onClick={() => hide(true)} style={{ ...button("tertiary", "sm"), color: color.textMuted }}>
-              Hide
-            </button>
+            <IconButton icon={X} label="Hide setup guide" variant="tertiary" size="sm" onClick={() => hide(true)} style={{ color: color.textMuted }} />
           </div>
         </div>
 
@@ -145,7 +145,7 @@ export function SetupGuide({ shop, steps }: { shop: string; steps: SetupStep[] }
                   textAlign: "left",
                 }}
               >
-                <Check done={s.done} />
+                <StepMark done={s.done} />
                 <span
                   style={{
                     flex: 1,
@@ -166,7 +166,8 @@ export function SetupGuide({ shop, steps }: { shop: string; steps: SetupStep[] }
                   <p style={{ margin: 0, ...text.bodySm, color: color.text }}>{s.body}</p>
                   {s.action.href ? (
                     <a href={s.action.href} target="_blank" rel="noopener noreferrer" style={{ ...button(s.done ? "secondary" : "primary", "sm"), textDecoration: "none" }}>
-                      {s.action.label} ↗
+                      {s.action.label}
+                      <ExternalLink aria-hidden size={14} strokeWidth={2} />
                     </a>
                   ) : (
                     <button type="button" style={button(s.done ? "secondary" : "primary", "sm")} onClick={() => s.action.to && navigate(s.action.to)}>

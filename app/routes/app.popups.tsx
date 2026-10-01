@@ -1,4 +1,5 @@
 import { useMemo, useState ,useEffect} from "react";
+import { ChevronDown, ChevronLeft, ChevronRight, CircleHelp, Gift, GripVertical, LayoutGrid, LayoutTemplate, LogOut, Mail, Plus, Search, Trash2, X, type LucideIcon } from "lucide-react";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { useActionData, useLoaderData, useNavigate, useNavigation, useRevalidator, useSubmit } from "react-router";
 import { authenticate } from "../shopify.server";
@@ -7,6 +8,7 @@ import { AUDIT_GRID, AUDIT_HEADERS } from "../models/audit-format";
 import { AuditCells, stickyEnd } from "../components/audit-cells";
 import { actorName } from "../models/actor.server";
 import { RowActions } from "../components/row-actions";
+import { Select } from "../components/select";
 
 /* ============================================================
    LOADER
@@ -434,12 +436,13 @@ const POPUP_TEMPLATES: {
 const TEMPLATE_FILTERS: {
   value: TemplateCategory;
   label: string;
+  icon: LucideIcon;
 }[] = [
-  { value: "all", label: "All" },
-  { value: "list-growth", label: "List growth" },
-  { value: "spin", label: "Spin & win" },
-  { value: "quiz", label: "Quiz" },
-  { value: "exit-intent", label: "Exit intent" },
+  { value: "all", label: "All", icon: LayoutGrid },
+  { value: "list-growth", label: "List growth", icon: Mail },
+  { value: "spin", label: "Spin & win", icon: Gift },
+  { value: "quiz", label: "Quiz", icon: CircleHelp },
+  { value: "exit-intent", label: "Exit intent", icon: LogOut },
 ];
 
 type PopupRecord = {
@@ -1124,7 +1127,7 @@ export default function Popups() {
             onMouseLeave={() =>
               setCreateHovered(false)
             }
-            style={{
+            style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "6px", 
               border: "none",
               background:
                 createHovered
@@ -1154,7 +1157,8 @@ export default function Popups() {
                 "background 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease",
             }}
           >
-            + Create popup
+            <Plus aria-hidden size={15} strokeWidth={2} />
+            Create popup
           </button>
 
         </div>
@@ -1246,11 +1250,11 @@ export default function Popups() {
                     "translateY(-50%)",
                   color:
                     "#8D98A7",
-                  fontSize:
-                    "14px",
+                  display: "flex",
+                pointerEvents: "none",
                 }}
               >
-                ⌕
+                <Search aria-hidden size={14} strokeWidth={2} />
               </span>
 
               <input
@@ -1381,7 +1385,7 @@ export default function Popups() {
               )}
 
 
-              <select
+              <Select
                 value={sortBy}
                 onChange={(e) =>
                   setSortBy(
@@ -1416,7 +1420,7 @@ export default function Popups() {
                 <option value="priority">
                   Priority
                 </option>
-              </select>
+              </Select>
 
               <div
                 style={{
@@ -1454,7 +1458,7 @@ export default function Popups() {
                   Bulk actions
                   {selectedIds.size > 0 &&
                     ` (${selectedIds.size})`}
-                  {" "}▾
+                  <ChevronDown aria-hidden size={14} strokeWidth={2} />
                 </button>
 
                 {bulkMenuOpen && (
@@ -1486,6 +1490,9 @@ export default function Popups() {
                       style={{
                         width: "100%",
                         textAlign: "left",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "8px",
                         border: "none",
                         background: "#FFFFFF",
                         color:
@@ -1501,6 +1508,7 @@ export default function Popups() {
                             : "pointer",
                       }}
                     >
+                      <Trash2 aria-hidden size={14} strokeWidth={2} />
                       Delete selected
                     </button>
                   </div>
@@ -1667,13 +1675,11 @@ export default function Popups() {
                       "center",
                     color:
                       "#0B3D66",
-                    fontSize:
-                      "21px",
                     marginBottom:
                       "13px",
                   }}
                 >
-                  ▣
+                  <LayoutTemplate aria-hidden size={21} strokeWidth={2} />
                 </div>
 
                 <h3
@@ -1708,7 +1714,7 @@ export default function Popups() {
                   onClick={
                     handleCreatePopup
                   }
-                  style={{
+                  style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "6px", 
                     border:
                       "none",
                     background:
@@ -1727,7 +1733,8 @@ export default function Popups() {
                       "pointer",
                   }}
                 >
-                  + Create popup
+                  <Plus aria-hidden size={15} strokeWidth={2} />
+                  Create popup
                 </button>
 
               </div>
@@ -1989,12 +1996,12 @@ export default function Popups() {
                     style={{
                       cursor: "grab",
                       color: "#B7C0CC",
-                      fontSize: "14px",
-                      textAlign: "center",
+                      display: "flex",
+                      justifyContent: "center",
                       userSelect: "none",
                     }}
                   >
-                    ⋮⋮
+                    <GripVertical aria-hidden size={16} strokeWidth={2} />
                   </div>
 
                   {/* POPUP */}
@@ -2032,13 +2039,11 @@ export default function Popups() {
                             "center",
                           color:
                             "#786A5D",
-                          fontSize:
-                            "16px",
-                          flexShrink:
+                            flexShrink:
                             0,
                         }}
                       >
-                        ▣
+                        <LayoutTemplate aria-hidden size={16} strokeWidth={2} />
                       </div>
 
                       {/* minWidth 0 lets a long name shrink and
@@ -2324,6 +2329,8 @@ export default function Popups() {
                 }}
               >
                 <button
+                    aria-label="Previous page"
+                    title="Previous page"
                   type="button"
                   disabled={
                     safeCurrentPage === 1
@@ -2349,7 +2356,7 @@ export default function Popups() {
                     borderRadius:
                       "7px",
                     padding:
-                      "7px 12px",
+                      "7px 8px",
                     fontSize:
                       "12px",
                     fontWeight:
@@ -2360,8 +2367,8 @@ export default function Popups() {
                         : "pointer",
                   }}
                 >
-                  Previous
-                </button>
+                    <ChevronLeft aria-hidden size={15} strokeWidth={2} />
+                  </button>
 
                 {Array.from(
                   {
@@ -2416,6 +2423,8 @@ export default function Popups() {
                 )}
 
                 <button
+                    aria-label="Next page"
+                    title="Next page"
                   type="button"
                   disabled={
                     safeCurrentPage ===
@@ -2443,7 +2452,7 @@ export default function Popups() {
                     borderRadius:
                       "7px",
                     padding:
-                      "7px 12px",
+                      "7px 8px",
                     fontSize:
                       "12px",
                     fontWeight:
@@ -2455,8 +2464,8 @@ export default function Popups() {
                         : "pointer",
                   }}
                 >
-                  Next
-                </button>
+                    <ChevronRight aria-hidden size={15} strokeWidth={2} />
+                  </button>
               </div>
             </div>
           )}
@@ -2554,16 +2563,18 @@ export default function Popups() {
               onClick={() =>
                 setShowTemplateGallery(false)
               }
+              aria-label="Close"
               style={{
                 border: "none",
                 background: "transparent",
-                fontSize: "20px",
                 cursor: "pointer",
                 color: "#657080",
                 lineHeight: 1,
+                display: "inline-flex",
+                padding: "2px",
               }}
             >
-              ×
+              <X aria-hidden size={20} strokeWidth={2} />
             </button>
           </div>
 
@@ -2607,8 +2618,12 @@ export default function Popups() {
                       fontSize: "12px",
                       fontWeight: 600,
                       cursor: "pointer",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "6px",
                     }}
                   >
+                    <filter.icon aria-hidden size={14} strokeWidth={2} />
                     {filter.label}
                   </button>
                 );
@@ -2740,7 +2755,7 @@ export default function Popups() {
             <button
               type="button"
               onClick={handleStartBlank}
-              style={{
+              style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "6px", 
                 border: "1px solid #D5DCE5",
                 background: "#FFFFFF",
                 color: "#0B3D66",
@@ -2751,6 +2766,7 @@ export default function Popups() {
                 cursor: "pointer",
               }}
             >
+              <Plus aria-hidden size={15} strokeWidth={2} />
               Start blank
             </button>
           </div>

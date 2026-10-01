@@ -55,6 +55,10 @@ import {
   type DomainRow,
 } from "../models/email-domains.server";
 import { authenticate } from "../shopify.server";
+import { Select } from "../components/select";
+import { Plus, RefreshCw, RotateCcw, Trash2, X } from "lucide-react";
+import { IconButton } from "../components/icon-button";
+import { SearchField } from "../components/search-field";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const { session } = await authenticate.admin(request);
@@ -332,14 +336,15 @@ export default function EmailDomainsPage() {
           </p>
         </div>
         <div style={{ display: "flex", gap: space[4], flexWrap: "wrap" }}>
-          <button
-            type="button"
-            style={button("secondary", "md", { disabled: !configured || reloading })}
-            disabled={!configured || reloading}
+          <IconButton
+            icon={RefreshCw}
+            label="Refresh"
+            busyLabel="Syncing"
+            spin
+            busy={reloading}
+            disabled={!configured}
             onClick={() => revalidator.revalidate()}
-          >
-            {reloading ? "Syncing…" : "Refresh"}
-          </button>
+          />
           {/* Import from Resend is hidden for now. Uncomment to bring it back.
           <button
             type="button"
@@ -352,10 +357,12 @@ export default function EmailDomainsPage() {
           */}
           {configured ? (
             <Link to={`${EMAIL_CHANNEL_PATH}/new`} style={{ ...button("primary", "md"), textDecoration: "none" }}>
+              <Plus aria-hidden size={15} strokeWidth={2} />
               Add domain
             </Link>
           ) : (
             <button type="button" style={button("primary", "md", { disabled: true })} disabled>
+              <Plus aria-hidden size={15} strokeWidth={2} />
               Add domain
             </button>
           )}
@@ -373,9 +380,7 @@ export default function EmailDomainsPage() {
         <Notice
           tone="danger"
           action={
-            <button type="button" style={button("secondary", "sm")} onClick={() => revalidator.revalidate()}>
-              Try again
-            </button>
+            <IconButton icon={RotateCcw} label="Try again" size="sm" onClick={() => revalidator.revalidate()} />
           }
         >
           {syncError} {domains.length ? "Showing the last saved list." : null}
@@ -386,9 +391,7 @@ export default function EmailDomainsPage() {
         <Notice
           tone="danger"
           action={
-            <button type="button" style={button("secondary", "sm")} onClick={() => revalidator.revalidate()}>
-              Try again
-            </button>
+            <IconButton icon={RotateCcw} label="Try again" size="sm" onClick={() => revalidator.revalidate()} />
           }
         >
           Domains could not be loaded. Please try again.
@@ -397,42 +400,41 @@ export default function EmailDomainsPage() {
 
       {domains.length > 0 ? (
         <div style={{ display: "flex", gap: space[4], flexWrap: "wrap", alignItems: "center", marginBottom: space[5] }}>
-          <input
-            type="search"
+          <SearchField
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="Search domains"
             aria-label="Search domains"
             style={{ ...input(), flex: "1 1 220px", maxWidth: "340px", minWidth: 0 }}
           />
-          <select aria-label="Filter by status" value={status} onChange={(e) => setStatus(e.target.value)} style={selectStyle()}>
+          <Select aria-label="Filter by status" value={status} onChange={(e) => setStatus(e.target.value)} style={selectStyle()}>
             <option value="all">All statuses</option>
             {VERIFICATION_FILTERS.map((f) => (
               <option key={f.value} value={f.value}>
                 {f.label}
               </option>
             ))}
-          </select>
-          <select aria-label="Filter by region" value={region} onChange={(e) => setRegion(e.target.value)} style={selectStyle()}>
+          </Select>
+          <Select aria-label="Filter by region" value={region} onChange={(e) => setRegion(e.target.value)} style={selectStyle()}>
             <option value="all">All regions</option>
             {DOMAIN_REGIONS.map((r) => (
               <option key={r.value} value={r.value}>
                 {r.label}
               </option>
             ))}
-          </select>
+          </Select>
           {filtersOn ? (
-            <button
-              type="button"
-              style={button("tertiary", "sm")}
+            <IconButton
+              icon={X}
+              label="Clear filters"
+              variant="tertiary"
+              size="sm"
               onClick={() => {
                 setQ("");
                 setStatus("all");
                 setRegion("all");
               }}
-            >
-              Clear
-            </button>
+            />
           ) : null}
           {selected.length > 0 ? (
             <button
@@ -440,6 +442,7 @@ export default function EmailDomainsPage() {
               style={{ ...button("danger", "md"), marginLeft: "auto" }}
               onClick={() => setConfirm({ ids: selected, label: `${selected.length} domains` })}
             >
+              <Trash2 aria-hidden size={16} strokeWidth={2} />
               Delete selected ({selected.length})
             </button>
           ) : null}
@@ -461,6 +464,7 @@ export default function EmailDomainsPage() {
             <div style={{ display: "flex", gap: space[4], justifyContent: "center", flexWrap: "wrap", marginTop: space[6] }}>
               {configured ? (
                 <Link to={`${EMAIL_CHANNEL_PATH}/new`} style={{ ...button("primary", "md"), textDecoration: "none" }}>
+                  <Plus aria-hidden size={15} strokeWidth={2} />
                   Add domain
                 </Link>
               ) : null}

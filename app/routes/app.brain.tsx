@@ -43,8 +43,9 @@ export default function Brain() {
             websites.
           </s-list-item>
           <s-list-item>
-            Analytics shows how many people saw each
-            campaign and how many submitted.
+            Home shows how many people saw each
+            campaign and how many submitted, with the
+            funnels and daily trends.
           </s-list-item>
           <s-list-item>
             Contacts lists every submission, and

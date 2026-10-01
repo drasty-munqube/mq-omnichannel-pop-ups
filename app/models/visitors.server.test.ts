@@ -295,6 +295,15 @@ describe("funnel events", () => {
   });
 });
 
+describe("test submissions", () => {
+  it("saves the contact but leaves it out of the numbers", async () => {
+    await saveSubmission(SHOP, { campaignId: "cmp_1", email: "me@test.com", fields: {}, test: true, anonymousId: PHONE_AID }, "shopify");
+    expect(mem.contacts).toHaveLength(1);
+    expect(mem.popupEvents.filter((e) => e.type === "submit")).toHaveLength(0);
+    expect(mem.visitors).toHaveLength(0);
+  });
+});
+
 describe("resolveContact", () => {
   it("reuses a contact by email (any case) and merges fields", async () => {
     const a = await resolveContact(SHOP, { email: "Jane@Store.com", fields: { name: "Jane" } });

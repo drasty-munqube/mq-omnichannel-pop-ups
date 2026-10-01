@@ -15,12 +15,14 @@ import { AuditDate } from "../components/audit-cells";
 import { ContactJourneyDialog } from "../components/contact-journey";
 import { CopyButton } from "../components/copy-snippet";
 import { Breadcrumbs } from "../components/domain-ui";
+import { RefLink } from "../components/ref-link";
 import { badge, button, card } from "../design/styles";
-import { color, fontFamily, fontWeight, radius, space, text } from "../design/tokens";
+import { color, fontFamily, fontWeight, layout, radius, space, text } from "../design/tokens";
 import { eventLabel } from "../models/journey-events";
 import { arrivedFrom, deviceLine, shortId } from "../models/visitor-list";
 import { getVisitorDetail } from "../models/visitor-list.server";
 import { authenticate } from "../shopify.server";
+import { ArrowLeft, Route } from "lucide-react";
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const { session } = await authenticate.admin(request);
@@ -64,11 +66,11 @@ export default function VisitorPage() {
   const { detail, loadError } = useLoaderData<typeof loader>();
   const [journeyOpen, setJourneyOpen] = useState(false);
   const dayLabel = useDayLabel();
-  const crumbs = (label: string) => <Breadcrumbs items={[{ label: "Visitors", to: "/app/visitors" }, { label }]} />;
+  const crumbs = (label: string) => <Breadcrumbs items={[{ label: "Contacts", to: "/app/contacts" }, { label }]} />;
 
   if (loadError || !detail) {
     return (
-      <s-page heading="Visitors" inlineSize="large">
+      <s-page heading="Contacts" inlineSize="large">
         <s-section>
           {crumbs("Visitor")}
           <div style={{ padding: `${space[10]} ${space[6]}`, textAlign: "center", border: `1px dashed ${color.borderStrong}`, borderRadius: "12px" }}>
@@ -76,8 +78,9 @@ export default function VisitorPage() {
             <p style={{ margin: `${space[3]} 0 ${space[6]}`, ...text.body, color: color.textMuted }}>
               {loadError ? "Please refresh the page." : "They may have been erased, or they belong to another store."}
             </p>
-            <Link to="/app/visitors" style={{ ...button("secondary", "md"), textDecoration: "none" }}>
-              Back to Visitors
+            <Link to="/app/contacts" style={{ ...button("secondary", "md"), textDecoration: "none" }}>
+              <ArrowLeft aria-hidden size={15} strokeWidth={2} />
+              Back to Contacts
             </Link>
           </div>
         </s-section>
@@ -92,7 +95,7 @@ export default function VisitorPage() {
   let lastDay = "";
 
   return (
-    <s-page heading="Visitors" inlineSize="large">
+    <s-page heading="Contacts" inlineSize="large">
       <s-section>
         {crumbs(name)}
 
@@ -106,11 +109,12 @@ export default function VisitorPage() {
             </div>
           </div>
           <div style={{ display: "flex", gap: space[4], flexWrap: "wrap" }}>
-            <Link to="/app/visitors" style={{ ...button("secondary", "md"), textDecoration: "none" }}>
-              Back
+            <Link to="/app/contacts" aria-label="Back to contacts" title="Back to contacts" style={{ ...button("secondary", "md"), width: layout.controlMd, boxSizing: "border-box", padding: 0, textDecoration: "none" }}>
+              <ArrowLeft aria-hidden size={17} strokeWidth={2} />
             </Link>
             {contact ? (
               <button type="button" style={button("primary", "md")} onClick={() => setJourneyOpen(true)}>
+                <Route aria-hidden size={15} strokeWidth={2} />
                 View contact journey
               </button>
             ) : null}
@@ -153,10 +157,10 @@ export default function VisitorPage() {
               ) : null}
               <DetailRow label="Device">{deviceLine(v) || "Unknown"}</DetailRow>
               <DetailRow label="Came from">{arrivedFrom(v)}</DetailRow>
-              {v.referrer ? <DetailRow label="Referrer">{v.referrer}</DetailRow> : null}
+              {v.referrer ? <DetailRow label="Referrer"><RefLink url={v.referrer} /></DetailRow> : null}
               {utm ? <DetailRow label="UTM">{utm}</DetailRow> : null}
-              {v.firstPageUrl ? <DetailRow label="Landing page">{v.firstPageUrl}</DetailRow> : null}
-              {v.lastPageUrl ? <DetailRow label="Last page">{v.lastPageUrl}</DetailRow> : null}
+              {v.firstPageUrl ? <DetailRow label="Landing page"><RefLink url={v.firstPageUrl} /></DetailRow> : null}
+              {v.lastPageUrl ? <DetailRow label="Last page"><RefLink url={v.lastPageUrl} /></DetailRow> : null}
             </dl>
           </div>
 
@@ -204,11 +208,8 @@ export default function VisitorPage() {
                           </div>
                           {e.detail ? <div style={{ ...text.bodySm, color: color.text, marginTop: space[2], overflowWrap: "anywhere" }}>{e.detail}</div> : null}
                           {e.pageUrl ? (
-                            <div
-                              title={e.pageUrl}
-                              style={{ ...text.bodySm, color: color.textMuted, marginTop: space[2], overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
-                            >
-                              {e.pageUrl.replace(/^https?:\/\//, "")}
+                            <div style={{ ...text.bodySm, marginTop: space[2], minWidth: 0, display: "flex" }}>
+                              <RefLink url={e.pageUrl} short nowrap />
                             </div>
                           ) : null}
                         </div>

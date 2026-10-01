@@ -55,14 +55,6 @@ export default function App() {
           Contacts
         </Link>
 
-        <Link to="/app/visitors">
-          Visitors
-        </Link>
-
-        <Link to="/app/analytics">
-          Analytics
-        </Link>
-
         <Link to="/app/email-templates">
           Email templates
         </Link>

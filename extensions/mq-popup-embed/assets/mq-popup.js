@@ -154,7 +154,7 @@
       for (var mk = 0; mk < window.localStorage.length; mk += 1) {
         var memoryKey = window.localStorage.key(mk);
         if (
-          /^mq_(views|collected|dismissed)_/.test(memoryKey) ||
+          /^mq_(views|collected|dismissed|button_hidden)_/.test(memoryKey) ||
           memoryKey === "mq_seen" ||
           memoryKey === "mq_first_visit" ||
           memoryKey === "mq_last_active"
@@ -604,6 +604,37 @@
     );
   }
 
+  /* The floating button's own ×. It hides the button, for as long
+     as the campaign's "After they close it" setting says (0 days:
+     for good). Closing the popup itself does not hide the button;
+     it only stops the popup opening by itself again. */
+  function buttonHiddenBlocks(campaign) {
+    return blockedSince(
+      "mq_button_hidden_" + campaign.campaignId,
+      Number(campaign.reshowDismissedDays) || 0,
+    );
+  }
+
+  function markButtonHidden(campaignId) {
+    if (memoryOff()) {
+      return;
+    }
+    safeSet("mq_button_hidden_" + campaignId, String(Date.now()));
+  }
+
+  /* Where the campaign's floating button sits, or "none". */
+  function floatingPositionOf(campaign) {
+    return [
+      "bottom_right",
+      "bottom_left",
+      "left_wall",
+      "right_wall",
+      "none",
+    ].indexOf(campaign.floatingButton) === -1
+      ? "bottom_right"
+      : campaign.floatingButton;
+  }
+
   /* Deliberately no "already submitted" memory here: a past
      submission should never permanently lock this campaign to
      the Success step on later visits — see openOffer() below,
@@ -647,6 +678,37 @@
   /* ------------------------------------------------------------
      DOM BUILDING
   ------------------------------------------------------------ */
+
+  /* Lucide "x" icon, drawn as an inline SVG so the storefront needs
+     no icon library. Used for the popup's close button (when it
+     is the default "×") and the floating button's dismiss. */
+  var SVG_NS = "http://www.w3.org/2000/svg";
+
+  function closeIcon(size, strokeWidth) {
+    var svg = document.createElementNS(SVG_NS, "svg");
+    svg.setAttribute("width", String(size));
+    svg.setAttribute("height", String(size));
+    svg.setAttribute("viewBox", "0 0 24 24");
+    svg.setAttribute("fill", "none");
+    svg.setAttribute("stroke", "currentColor");
+    svg.setAttribute("stroke-width", String(strokeWidth || 2));
+    svg.setAttribute("stroke-linecap", "round");
+    svg.setAttribute("stroke-linejoin", "round");
+    svg.setAttribute("aria-hidden", "true");
+    svg.setAttribute("focusable", "false");
+    svg.style.display = "block";
+    ["M18 6 6 18", "m6 6 12 12"].forEach(function (d) {
+      var path = document.createElementNS(SVG_NS, "path");
+      path.setAttribute("d", d);
+      svg.appendChild(path);
+    });
+    return svg;
+  }
+
+  function isDefaultCloseText(text) {
+    var t = String(text == null ? "" : text).trim();
+    return t === "" || t === "\u00d7" || t === "x" || t === "X" || t === "\u2715";
+  }
 
   function el(tag, styles, attrs) {
     var node = document.createElement(tag);
@@ -1367,6 +1429,10 @@
         fields: fieldValues,
         device: currentDevice(),
         pageUrl: window.location.href,
+        /* A test from the theme editor or a preview link: the
+           contact is still saved (so the merchant can check the
+           email), but it is not counted in the numbers. */
+        test: memoryOff() || undefined,
       }),
     })
       .catch(function () {
@@ -1379,7 +1445,10 @@
 
   var countedCampaigns = [];
 
-  function buildWidget(campaign) {
+  /* buttonOnly: the shopper already closed this popup and it is
+     still within "After they close it", so only the floating button
+     is shown. The popup opens again only if they click it. */
+  function buildWidget(campaign, buttonOnly) {
     var settings = popupSettingsFor(campaign.steps);
     var overlay = null;
 
@@ -1506,13 +1575,14 @@
       },
       { type: "button", "aria-label": "Dismiss" },
     );
-    pillClose.textContent = "×";
+    pillClose.appendChild(closeIcon(13, 2.5));
     pillClose.addEventListener("click", function (
       event,
     ) {
       event.stopPropagation();
-      markDismissed(campaign.campaignId);
-      reportDismiss();
+      /* The popup close was already counted; this only hides the
+         button. */
+      markButtonHidden(campaign.campaignId);
       pill.remove();
     });
 
@@ -1525,15 +1595,7 @@
        "none" to open the offer by itself. On the left edge the tab is turned so its
        text reads from the bottom up, like a book spine. */
 
-    var floatingPosition = [
-      "bottom_right",
-      "bottom_left",
-      "left_wall",
-      "right_wall",
-      "none",
-    ].indexOf(campaign.floatingButton) === -1
-      ? "bottom_right"
-      : campaign.floatingButton;
+    var floatingPosition = floatingPositionOf(campaign);
 
     if (
       floatingPosition === "left_wall" ||
@@ -1630,8 +1692,18 @@
         },
         { type: "button" },
       );
-      closeButton.textContent =
-        settings.closeButtonText;
+      if (isDefaultCloseText(settings.closeButtonText)) {
+        closeButton.style.display = "flex";
+        closeButton.style.alignItems = "center";
+        closeButton.style.justifyContent = "center";
+        closeButton.style.padding = "0";
+        closeButton.setAttribute("aria-label", "Close");
+        closeButton.appendChild(
+          closeIcon(Math.max(14, Math.round(Number(settings.closeButtonSize || 38) * 0.5)), 2.25),
+        );
+      } else {
+        closeButton.textContent = settings.closeButtonText;
+      }
       closeButton.addEventListener(
         "click",
         function () {
@@ -1762,11 +1834,19 @@
         overlay.remove();
         overlay = null;
 
-        /* The floating button comes back, so a shopper who closed
-           the offer can still open it again later on this page.
-           Not after a signup, and not when there is no button. */
-        if (!submitted && floatingPosition !== "none") {
-          document.body.appendChild(pill);
+        if (!submitted) {
+          /* Closing the popup is what "After they close it" counts
+             from, with or without a floating button, so the popup
+             does not open by itself again on the next page.
+             (Ignored under "No limit".) */
+          markDismissed(campaign.campaignId);
+
+          /* Then the floating button appears where the campaign
+             puts it, so the shopper can open the offer again. With
+             "No floating button" nothing is left on the page. */
+          if (floatingPosition !== "none") {
+            document.body.appendChild(pill);
+          }
         }
       }
     }
@@ -1775,6 +1855,10 @@
       if (overlay) {
         return;
       }
+
+      /* A view is the popup reaching the screen, whether it opened
+         by itself or from the floating button. */
+      countView();
 
       /* Hide the teaser while the offer is open — otherwise
          both are visible stacked on top of each other. */
@@ -1824,7 +1908,7 @@
     var scrollHandler = null;
     var cancelExitIntent = null;
 
-    function showTeaser() {
+    function countView() {
       /* The view is counted here, when the popup actually
          reaches the screen — not when the campaign was picked.
          A delay or scroll trigger may never fire, and a visitor
@@ -1843,14 +1927,13 @@
         markViewed(campaign.campaignId);
         sendEvent(campaign, "view");
       }
+    }
 
-      /* No floating button: the offer opens by itself. */
-      if (floatingPosition === "none") {
-        openOffer();
-        return;
-      }
-
-      document.body.appendChild(pill);
+    /* The popup always comes first: when the trigger fires the
+       offer opens by itself. The floating button only appears
+       after the shopper closes it (see closeOverlay). */
+    function showPopup() {
+      openOffer();
     }
 
     /* Everything this widget attached to the page, undone. The
@@ -1886,14 +1969,17 @@
       }
     }
 
-    if (previewCampaignId) {
+    if (buttonOnly) {
+      /* Closed before: just the floating button, straight away. */
+      document.body.appendChild(pill);
+    } else if (previewCampaignId) {
       /* Preview: no waiting for the trigger. */
-      showTeaser();
+      showPopup();
     } else if (campaign.trigger === "Exit intent") {
-      cancelExitIntent = onExitIntent(showTeaser);
+      cancelExitIntent = onExitIntent(showPopup);
     } else if (campaign.trigger === "After delay") {
       delayTimer = window.setTimeout(
-        showTeaser,
+        showPopup,
         campaign.triggerDelaySeconds * 1000,
       );
     } else if (campaign.trigger === "Scroll depth") {
@@ -1910,7 +1996,7 @@
           100;
         if (scrolled >= campaign.triggerScrollPercent) {
           handled = true;
-          showTeaser();
+          showPopup();
         }
       };
 
@@ -1919,7 +2005,7 @@
         scrollHandler,
       );
     } else {
-      showTeaser();
+      showPopup();
     }
 
     return {
@@ -1966,6 +2052,16 @@
 
       /* The first rule that says no, in the order they are
          checked. Named so ?mq_debug=1 can say why. */
+      /* Closed before, within "After they close it": the popup
+         does not open by itself, but a campaign with a floating
+         button still shows that button (unless the shopper hid it
+         with its own ×). */
+      var closedBefore = dismissedBlocks(campaign);
+      var buttonOnly =
+        closedBefore &&
+        floatingPositionOf(campaign) !== "none" &&
+        !buttonHiddenBlocks(campaign);
+
       var reason = !matchesPageTargets(campaign)
         ? "this page is not one of its target pages"
         : !matchesDevices(campaign)
@@ -1979,8 +2075,9 @@
                   (Number(campaign.reshowCollectedDays) > 0
                     ? campaign.reshowCollectedDays + " days)"
                     : "never show again)")
-                : dismissedBlocks(campaign)
-                  ? "this browser closed it (After they close it: " +
+                : closedBefore && !buttonOnly
+                  ? (floatingPositionOf(campaign) === "none" ? "" : "its floating button was hidden and ") +
+                    "this browser closed it (After they close it: " +
                     (Number(campaign.reshowDismissedDays) > 0
                       ? campaign.reshowDismissedDays + " days)"
                       : "never show again)")
@@ -1994,13 +2091,17 @@
       }
 
       debugLog(
-        'Showing "' +
-          (campaign.popupName || campaign.campaignId) +
-          '" (trigger: ' +
-          (campaign.trigger || "Immediately") +
-          ").",
+        buttonOnly
+          ? 'Showing only the floating button of "' +
+              (campaign.popupName || campaign.campaignId) +
+              '": this browser closed the popup before.'
+          : 'Showing "' +
+              (campaign.popupName || campaign.campaignId) +
+              '" (trigger: ' +
+              (campaign.trigger || "Immediately") +
+              ").",
       );
-      return campaign;
+      return { campaign: campaign, buttonOnly: buttonOnly };
     }
 
     return null;
@@ -2027,10 +2128,11 @@
       activeWidget = null;
     }
 
-    var campaign = pickCampaign();
+    var pick = pickCampaign();
 
-    if (campaign) {
-      activeWidget = buildWidget(campaign);
+    if (pick) {
+      var campaign = pick.campaign;
+      activeWidget = buildWidget(campaign, pick.buttonOnly);
 
       /* One page view per page load, and only on pages where a
          campaign is actually live. */

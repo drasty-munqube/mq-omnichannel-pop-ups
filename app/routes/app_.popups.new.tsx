@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { ArrowLeft, CircleHelp, Copy, FileText, GitBranch, GripVertical, Heading, MessageCircle, Monitor, Palette, RectangleHorizontal, ShoppingBag, Smartphone, TextCursorInput, Timer, Trash2, Type, X, type LucideIcon } from "lucide-react";
 import type { DragEvent } from "react";
 import type { CSSProperties } from "react";
 import type {
@@ -16,6 +17,7 @@ import {
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
 import { actorName } from "../models/actor.server";
+import { Select } from "../components/select";
 
 /* =========================================================
    TYPES
@@ -74,6 +76,41 @@ type Block = {
 
   buttonTextColor: string;
 };
+
+
+/* The popup's close button. The default "×" is drawn as the
+   Lucide X icon, the same one the storefront popup uses; any
+   other text the merchant typed is shown as it is. */
+/* Icons for the "Add block" buttons. */
+const BLOCK_ICONS: Record<string, LucideIcon> = {
+  heading: Heading,
+  text: Type,
+  button: RectangleHorizontal,
+  field: TextCursorInput,
+  channel: MessageCircle,
+  quiz: CircleHelp,
+  timer: Timer,
+  product: ShoppingBag,
+};
+
+/* The block's Duplicate and Delete buttons (icons only). */
+const blockIconButton: CSSProperties = {
+  width: "40px",
+  height: "40px",
+  padding: 0,
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  borderRadius: "8px",
+  cursor: "pointer",
+};
+
+const isDefaultCloseText = (text: string) => ["×", "x", "X", "✕", ""].includes(text.trim());
+
+function CloseGlyph({ text, size }: { text: string; size: number }) {
+  if (!isDefaultCloseText(text)) return <>{text}</>;
+  return <X aria-hidden size={Math.max(14, Math.round(size * 0.5))} strokeWidth={2.25} />;
+}
 
 type PopupSettings = {
   bodyBackground: string;
@@ -1825,7 +1862,7 @@ export default function NewPopup() {
             title="Drag to reorder"
             aria-label="Drag to reorder"
           >
-            ⋮⋮
+            <GripVertical aria-hidden size={14} strokeWidth={2} />
           </div>
 
           <div
@@ -1913,7 +1950,7 @@ export default function NewPopup() {
             title="Drag to reorder"
             aria-label="Drag to reorder"
           >
-            ⋮⋮
+            <GripVertical aria-hidden size={14} strokeWidth={2} />
           </div>
 
           <div
@@ -2016,7 +2053,7 @@ export default function NewPopup() {
             title="Drag to reorder"
             aria-label="Drag to reorder"
           >
-            ⋮⋮
+            <GripVertical aria-hidden size={14} strokeWidth={2} />
           </div>
 
           <div
@@ -2100,7 +2137,7 @@ export default function NewPopup() {
             title="Drag to reorder"
             aria-label="Drag to reorder"
           >
-            ⋮⋮
+            <GripVertical aria-hidden size={14} strokeWidth={2} />
           </div>
 
           <div
@@ -2188,7 +2225,7 @@ export default function NewPopup() {
           title="Drag to reorder"
           aria-label="Drag to reorder"
         >
-          ⋮⋮
+          <GripVertical aria-hidden size={14} strokeWidth={2} />
         </div>
 
         <div
@@ -2453,6 +2490,7 @@ export default function NewPopup() {
                 "/app/popups",
               )
             }
+            aria-label="Back to popups"
             style={{
               border:
                 "none",
@@ -2460,20 +2498,23 @@ export default function NewPopup() {
               background:
                 "transparent",
 
-              fontSize:
-                "28px",
-
               cursor:
                 "pointer",
 
               lineHeight:
                 1,
 
+              display:
+                "inline-flex",
+
+              padding:
+                "2px",
+
               color:
                 "#172033",
             }}
           >
-            ←
+            <ArrowLeft aria-hidden size={24} strokeWidth={2} />
           </button>
 
           <input
@@ -2508,7 +2549,7 @@ export default function NewPopup() {
             }}
           />
 
-          <select
+          <Select
             value={status}
             onChange={(event) =>
               setStatus(
@@ -2552,7 +2593,7 @@ export default function NewPopup() {
             <option value="active">
               Live
             </option>
-          </select>
+          </Select>
 
           {savedMessage && (
             <span
@@ -2617,6 +2658,9 @@ export default function NewPopup() {
                     item
                   }
                   type="button"
+                  aria-label={item === "mobile" ? "Mobile preview" : "Desktop preview"}
+                  aria-pressed={device === item}
+                  title={item === "mobile" ? "Mobile preview" : "Desktop preview"}
                   onClick={() =>
                     setDevice(
                       item,
@@ -2624,7 +2668,10 @@ export default function NewPopup() {
                   }
                   style={{
                     padding:
-                      "9px 14px",
+                      "8px 12px",
+
+                    display:
+                      "inline-flex",
 
                     border:
                       "none",
@@ -2645,10 +2692,11 @@ export default function NewPopup() {
                       "pointer",
                   }}
                 >
-                  {item ===
-                  "mobile"
-                    ? "Mobile"
-                    : "Desktop"}
+                  {item === "mobile" ? (
+                    <Smartphone aria-hidden size={17} strokeWidth={2} />
+                  ) : (
+                    <Monitor aria-hidden size={17} strokeWidth={2} />
+                  )}
                 </button>
               ),
             )}
@@ -2660,7 +2708,7 @@ export default function NewPopup() {
             type="button"
             onClick={() =>
               setPreviewStage(
-                "teaser",
+                "offer",
               )
             }
             style={{
@@ -2814,8 +2862,10 @@ export default function NewPopup() {
             }}
           >
             Click a step to edit it. Shoppers
-            see Teaser first, then Offer,
-            then Success after they act.
+            see the Offer first, and Success
+            after they sign up. The Teaser is
+            the floating button that shows
+            after they close the Offer.
           </p>
 
           {/* POPUP STEPS */}
@@ -3058,8 +3108,24 @@ export default function NewPopup() {
 
                       fontWeight:
                         600,
+
+                      display:
+                        "inline-flex",
+
+                      alignItems:
+                        "center",
+
+                      justifyContent:
+                        "center",
+
+                      gap:
+                        "6px",
                     }}
                   >
+                    {(() => {
+                      const Icon = BLOCK_ICONS[type];
+                      return Icon ? <Icon aria-hidden size={15} strokeWidth={2} /> : null;
+                    })()}
                     {label}
                   </button>
                 ),
@@ -3292,9 +3358,6 @@ export default function NewPopup() {
                   color:
                     "#FFFFFF",
 
-                  fontSize:
-                    "13px",
-
                   lineHeight:
                     1,
 
@@ -3302,7 +3365,7 @@ export default function NewPopup() {
                     0,
                 }}
               >
-                ×
+                <X aria-hidden size={13} strokeWidth={2.5} />
               </div>
             </div>
           ) : (
@@ -3435,9 +3498,10 @@ export default function NewPopup() {
                     "center",
                 }}
               >
-                {
-                  popupSettings.closeButtonText
-                }
+                <CloseGlyph
+                  text={popupSettings.closeButtonText}
+                  size={popupSettings.closeButtonSize}
+                />
               </button>
             </div>
 
@@ -3536,7 +3600,7 @@ export default function NewPopup() {
                       ".04em",
                   }}
                 >
-                  Drag ⋮⋮ to reorder
+                  Drag <GripVertical aria-hidden size={12} strokeWidth={2} style={{ verticalAlign: "-2px" }} /> to reorder
                 </div>
               )}
 
@@ -3676,8 +3740,27 @@ export default function NewPopup() {
 
                     cursor:
                       "pointer",
+
+                    display:
+                      "inline-flex",
+
+                    alignItems:
+                      "center",
+
+                    justifyContent:
+                      "center",
+
+                    gap:
+                      "6px",
                   }}
                 >
+                  {tab === "content" ? (
+                    <FileText aria-hidden size={15} strokeWidth={2} />
+                  ) : tab === "style" ? (
+                    <Palette aria-hidden size={15} strokeWidth={2} />
+                  ) : (
+                    <GitBranch aria-hidden size={15} strokeWidth={2} />
+                  )}
                   {
                     label
                   }
@@ -3911,7 +3994,7 @@ export default function NewPopup() {
                           Answer type
                         </label>
 
-                        <select
+                        <Select
                           value={
                             selectedBlock.fieldType
                           }
@@ -3963,7 +4046,7 @@ export default function NewPopup() {
                           <option value="phone">
                             Phone
                           </option>
-                        </select>
+                        </Select>
 
                         <label
                           style={{
@@ -4097,27 +4180,19 @@ export default function NewPopup() {
                         onClick={
                           duplicateBlock
                         }
+                        aria-label="Duplicate block"
+                        title="Duplicate block"
                         style={{
-                          flex:
-                            1,
-
-                          padding:
-                            "10px",
-
+                          ...blockIconButton,
                           border:
                             "1px solid #D5DCE5",
-
-                          borderRadius:
-                            "8px",
-
                           background:
                             "#FFFFFF",
-
-                          cursor:
-                            "pointer",
+                          color:
+                            "#172033",
                         }}
                       >
-                        Duplicate
+                        <Copy aria-hidden size={17} strokeWidth={2} />
                       </button>
 
                       <button
@@ -4125,30 +4200,19 @@ export default function NewPopup() {
                         onClick={
                           deleteBlock
                         }
+                        aria-label="Delete block"
+                        title="Delete block"
                         style={{
-                          flex:
-                            1,
-
-                          padding:
-                            "10px",
-
+                          ...blockIconButton,
                           border:
                             "1px solid #F0B9B9",
-
-                          borderRadius:
-                            "8px",
-
                           background:
                             "#FFF5F5",
-
                           color:
                             "#C62828",
-
-                          cursor:
-                            "pointer",
                         }}
                       >
-                        Delete
+                        <Trash2 aria-hidden size={17} strokeWidth={2} />
                       </button>
                     </div>
                   </>
@@ -5149,7 +5213,7 @@ export default function NewPopup() {
                         Alignment
                       </label>
 
-                      <select
+                      <Select
                         value={
                           selectedBlock.align
                         }
@@ -5194,7 +5258,7 @@ export default function NewPopup() {
                         <option value="right">
                           Right
                         </option>
-                      </select>
+                      </Select>
                     </div>
 
                     <div
@@ -5224,7 +5288,7 @@ export default function NewPopup() {
                         Font family
                       </label>
 
-                      <select
+                      <Select
                         value={
                           selectedBlock.fontFamily
                         }
@@ -5277,7 +5341,7 @@ export default function NewPopup() {
                         <option value="Verdana">
                           Verdana
                         </option>
-                      </select>
+                      </Select>
                     </div>
                   </div>
                 )}
@@ -5555,7 +5619,7 @@ export default function NewPopup() {
 
           <span style={{ color: "#9CA3AF" }}>
             {previewStage === "teaser" &&
-              "Tap the teaser to open the offer"}
+              "After closing the popup, shoppers see this floating button. Tap it to open the offer again"}
             {previewStage === "offer" &&
               "Tap the button to see the success screen"}
             {previewStage === "success" &&
@@ -5581,7 +5645,8 @@ export default function NewPopup() {
               cursor: "pointer",
             }}
           >
-            Close preview ×
+            Close preview
+            <X aria-hidden size={14} strokeWidth={2} />
           </button>
         </div>
 
@@ -5948,13 +6013,12 @@ export default function NewPopup() {
                     border: "none",
                     background: "rgba(255,255,255,0.18)",
                     color: "#FFFFFF",
-                    fontSize: "13px",
                     lineHeight: 1,
                     cursor: "pointer",
                     flexShrink: 0,
                   }}
                 >
-                  ×
+                  <X aria-hidden size={13} strokeWidth={2.5} />
                 </button>
               </div>
             )}
@@ -6036,9 +6100,16 @@ export default function NewPopup() {
                         color:
                           popupSettings.closeButtonColor,
                         cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        padding: 0,
                       }}
                     >
-                      {popupSettings.closeButtonText}
+                      <CloseGlyph
+                        text={popupSettings.closeButtonText}
+                        size={popupSettings.closeButtonSize}
+                      />
                     </button>
                   </div>
 

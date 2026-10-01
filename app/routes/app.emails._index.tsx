@@ -30,7 +30,7 @@ import {
 import { useAppBridge } from "@shopify/app-bridge-react";
 
 import { badge, button, input, tableHead, tableRow } from "../design/styles";
-import { color, fontWeight, space, text } from "../design/tokens";
+import { color, fontWeight, layout, space, text } from "../design/tokens";
 import { AuditDate, stickyEnd } from "../components/audit-cells";
 import { RowActions } from "../components/row-actions";
 import { activeEmailProvider } from "../models/delivery.server";
@@ -45,6 +45,9 @@ import {
   type EmailFilterKey,
 } from "../models/email-status";
 import { authenticate } from "../shopify.server";
+import { ChevronLeft, ChevronRight, Search } from "lucide-react";
+import { IconButton } from "../components/icon-button";
+import { SearchField } from "../components/search-field";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const { session } = await authenticate.admin(request);
@@ -170,15 +173,14 @@ export default function EmailsPage() {
           </nav>
           <Form method="get" role="search" style={{ display: "flex", gap: space[3], flex: "1 1 220px", maxWidth: "360px" }}>
             {filter !== "all" ? <input type="hidden" name="status" value={filter} /> : null}
-            <input
+            <SearchField
               name="q"
-              type="search"
               defaultValue={q}
               placeholder="Search by email"
               aria-label="Search by email"
               style={{ ...input(), flex: 1, minWidth: 0 }}
             />
-            <button type="submit" style={button("secondary", "md")}>Search</button>
+            <IconButton type="submit" icon={Search} label="Search" />
           </Form>
         </div>
 
@@ -259,13 +261,13 @@ export default function EmailsPage() {
             </span>
             <div style={{ display: "flex", gap: space[3] }}>
               {page > 1 ? (
-                <Link to={hrefFor(filter, q, page - 1)} style={{ ...button("secondary", "sm"), textDecoration: "none" }}>
-                  Previous
+                <Link to={hrefFor(filter, q, page - 1)} aria-label="Previous page" title="Previous page" style={{ ...button("secondary", "sm"), width: layout.controlSm, boxSizing: "border-box", padding: 0, textDecoration: "none" }}>
+                  <ChevronLeft aria-hidden size={16} strokeWidth={2} />
                 </Link>
               ) : null}
               {page < pages ? (
-                <Link to={hrefFor(filter, q, page + 1)} style={{ ...button("secondary", "sm"), textDecoration: "none" }}>
-                  Next
+                <Link to={hrefFor(filter, q, page + 1)} aria-label="Next page" title="Next page" style={{ ...button("secondary", "sm"), width: layout.controlSm, boxSizing: "border-box", padding: 0, textDecoration: "none" }}>
+                  <ChevronRight aria-hidden size={16} strokeWidth={2} />
                 </Link>
               ) : null}
             </div>

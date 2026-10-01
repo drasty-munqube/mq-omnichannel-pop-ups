@@ -60,6 +60,8 @@ import {
   verifyShopDomain,
 } from "../models/email-domains.server";
 import { authenticate } from "../shopify.server";
+import { RefreshCw, RotateCcw, ShieldCheck, Trash2 } from "lucide-react";
+import { IconButton } from "../components/icon-button";
 
 const POLL_MS = 10_000;
 const POLL_FOR_MS = 5 * 60_000;
@@ -555,28 +557,28 @@ export default function EmailDomainPage() {
         </div>
 
         <div style={{ display: "flex", gap: space[4], flexWrap: "wrap" }}>
-          <button
-            type="button"
-            style={button("secondary", "md", { disabled: refreshing })}
-            disabled={refreshing}
+          <IconButton
+            icon={RefreshCw}
+            label="Refresh"
+            busyLabel="Refreshing"
+            spin
+            busy={refreshing}
             onClick={() => revalidator.revalidate()}
-          >
-            {refreshing ? "Refreshing…" : "Refresh"}
-          </button>
-          <button
-            type="button"
-            style={button("danger", "md", { disabled: Boolean(busyIntent) })}
+          />
+          <IconButton
+            icon={Trash2}
+            label="Delete domain"
+            variant="danger"
             disabled={Boolean(busyIntent)}
             onClick={() => setConfirmDelete(true)}
-          >
-            Delete
-          </button>
+          />
           <button
             type="button"
             style={button("primary", "md", { disabled: Boolean(busyIntent) || Boolean(error) })}
             disabled={Boolean(busyIntent) || Boolean(error)}
             onClick={() => intent("verify")}
           >
+            <ShieldCheck aria-hidden size={15} strokeWidth={2} />
             {busyIntent === "verify" ? "Verifying…" : "Verify DNS records"}
           </button>
         </div>
@@ -586,9 +588,7 @@ export default function EmailDomainPage() {
         <Notice
           tone="danger"
           action={
-            <button type="button" style={button("secondary", "sm")} onClick={() => revalidator.revalidate()}>
-              Try again
-            </button>
+            <IconButton icon={RotateCcw} label="Try again" size="sm" onClick={() => revalidator.revalidate()} />
           }
         >
           {error} The details below are the last saved copy.

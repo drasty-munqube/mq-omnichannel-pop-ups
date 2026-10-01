@@ -1,4 +1,7 @@
+import { Prisma } from "@prisma/client";
+
 import db from "../db.server";
+import { TEST_URL_MARKERS, realTrafficWhere } from "./test-traffic";
 
 import {
   addCount,
@@ -25,6 +28,8 @@ import {
 export async function getAnalytics(
   shop: string,
   days: number,
+  /* One campaign, or null for all of the shop's campaigns. */
+  campaignId: string | null = null,
 ) {
   const today = new Date();
   const since = startOfUtcDay(today);
@@ -32,9 +37,13 @@ export async function getAnalytics(
     since.getUTCDate() - (days - 1),
   );
 
+  /* Test traffic (theme editor, previews) is left out, see
+     test-traffic.ts. */
   const where = {
     shop,
     createdAt: { gte: since },
+    ...(campaignId ? { campaignId } : {}),
+    ...realTrafficWhere,
   };
 
   const [
@@ -79,6 +88,11 @@ export async function getAnalytics(
       FROM "PopupEvent"
       WHERE "shop" = ${shop}
         AND "createdAt" >= ${since}
+        ${campaignId ? Prisma.sql`AND "campaignId" = ${campaignId}` : Prisma.empty}
+        AND ("pageUrl" IS NULL OR NOT (${Prisma.join(
+          TEST_URL_MARKERS.map((marker) => Prisma.sql`"pageUrl" LIKE ${`%${marker}%`}`),
+          " OR ",
+        )}))
       GROUP BY 1, 2
       ORDER BY 1
     `,

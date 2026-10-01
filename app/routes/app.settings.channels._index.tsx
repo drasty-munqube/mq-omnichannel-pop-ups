@@ -10,6 +10,7 @@
 
 import type { LoaderFunctionArgs } from "react-router";
 import { Link, useLoaderData } from "react-router";
+import { ArrowRight } from "lucide-react";
 
 import { ChannelIcon } from "../components/channel-icon";
 import { badge, card } from "../design/styles";
@@ -63,7 +64,10 @@ function CardBody({ channel, note }: { channel: ChannelConfig; note: string | nu
           <div style={{ marginTop: space[4], ...text.bodySm, color: color.text, fontWeight: fontWeight.medium }}>{note}</div>
         ) : null}
         {ready ? (
-          <div style={{ marginTop: space[4], ...text.label, color: color.primary }}>Manage →</div>
+          <div style={{ marginTop: space[4], ...text.label, color: color.primary, display: "inline-flex", alignItems: "center", gap: space[2] }}>
+            Manage
+            <ArrowRight aria-hidden size={14} strokeWidth={2} />
+          </div>
         ) : null}
       </div>
     </>

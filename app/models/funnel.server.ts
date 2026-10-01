@@ -9,6 +9,7 @@
 
 import db from "../db.server";
 import { startOfUtcDay } from "./analytics";
+import { realTrafficWhere } from "./test-traffic";
 import { addFunnelRow, emptyFunnelCounts } from "./funnel";
 
 export async function getFunnelCounts(shop: string, opts: { campaignId: string | null; days: number }, now = new Date()) {
@@ -21,6 +22,8 @@ export async function getFunnelCounts(shop: string, opts: { campaignId: string |
       shop,
       createdAt: { gte: since },
       ...(opts.campaignId ? { campaignId: opts.campaignId } : {}),
+      /* Theme editor and preview traffic is not counted. */
+      ...realTrafficWhere,
     },
     _count: { _all: true },
   });

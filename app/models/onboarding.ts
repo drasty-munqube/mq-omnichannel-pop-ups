@@ -42,36 +42,39 @@ export function writeFlag(key: string, on: boolean) {
    WELCOME TOUR
 ------------------------------------------------------------ */
 
-export type TourStep = { title: string; body: string; icon: string };
+/* Icon names, drawn with Lucide in the tour dialog. */
+export type TourIcon = "welcome" | "popups" | "campaigns" | "contacts" | "logs" | "ready";
+
+export type TourStep = { title: string; body: string; icon: TourIcon };
 
 export const TOUR_STEPS: TourStep[] = [
   {
-    icon: "✦",
+    icon: "welcome",
     title: "Welcome to MQ Pop-ups",
     body: "Collect emails and phone numbers with popups, send each new subscriber a discount, and see what every visitor did before they signed up. This short tour shows where everything is.",
   },
   {
-    icon: "▢",
+    icon: "popups",
     title: "Popups",
     body: "Design how your popup looks: the layout, the text, the fields you ask for and the thank-you screen. One popup can be used by many campaigns.",
   },
   {
-    icon: "◎",
+    icon: "campaigns",
     title: "Campaigns",
     body: "A campaign decides when and to whom a popup shows: which pages, which devices, new or returning visitors, and which discount they get. Launch it to make it live.",
   },
   {
-    icon: "☰",
-    title: "Visitors and Contacts",
-    body: "Visitors shows everyone who comes to your store, even before they sign up: pages viewed, popups seen and clicked. Everyone who signs up also lands in Contacts, with their full Journey.",
+    icon: "contacts",
+    title: "Contacts and Visitors",
+    body: "Contacts is one list of everyone who comes to your store: anonymous visitors, with the pages they viewed and popups they saw or clicked, and contacts who signed up, with their full Journey.",
   },
   {
-    icon: "✉",
+    icon: "logs",
     title: "Logs and Settings",
     body: "Logs shows every discount email and its live status from Resend. In Settings you add your own sending domain so emails come from your store's address.",
   },
   {
-    icon: "✓",
+    icon: "ready",
     title: "You're ready",
     body: "The setup guide on Home walks you through the first steps and ticks them off as you go. You can open this tour again from there at any time.",
   },

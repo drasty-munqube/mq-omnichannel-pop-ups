@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Check, Copy } from "lucide-react";
 
 /* ============================================================
    COPY SNIPPET
@@ -61,26 +62,34 @@ export function CopyButton({
     }
   };
 
+  const Glyph = copied ? Check : Copy;
+
+  /* Compact: an icon only, for IDs and values in tables. The
+     label stays available as the tooltip and to screen readers. */
   if (compact) {
+    const name = copied ? "Copied" : ariaLabel || label;
     return (
       <button
         type="button"
         onClick={copy}
-        aria-label={ariaLabel}
+        aria-label={name}
+        title={copied ? "Copied" : label}
         style={{
-          padding: "4px 10px",
-          fontSize: 12,
-          fontWeight: 600,
-          color: copied ? "#0A6E4A" : "#1F2937",
+          width: 28,
+          height: 28,
+          padding: 0,
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          color: copied ? "#0A6E4A" : "#5B6573",
           background: copied ? "#D9F2E6" : "#FFFFFF",
           border: `1px solid ${copied ? "#A7DCC4" : "#D5DAE1"}`,
           borderRadius: 6,
           cursor: "pointer",
-          whiteSpace: "nowrap",
           flexShrink: 0,
         }}
       >
-        {copied ? "Copied" : label}
+        <Glyph aria-hidden size={14} strokeWidth={2} />
       </button>
     );
   }
@@ -102,8 +111,12 @@ export function CopyButton({
         borderRadius: 8,
         cursor: "pointer",
         whiteSpace: "nowrap",
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 6,
       }}
     >
+      <Glyph aria-hidden size={14} strokeWidth={2} />
       {copied ? "Copied" : label}
     </button>
   );

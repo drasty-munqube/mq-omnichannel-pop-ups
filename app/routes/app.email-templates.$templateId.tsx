@@ -32,6 +32,7 @@ import {
   useSubmit,
 } from "react-router";
 import { useAppBridge } from "@shopify/app-bridge-react";
+import { ArrowLeft, RotateCcw, Trash2, Wand2 } from "lucide-react";
 
 import {
   button,
@@ -70,6 +71,8 @@ import {
 import { actorName } from "../models/actor.server";
 import { getShopInfo } from "../models/shop-info.server";
 import { authenticate } from "../shopify.server";
+import { Select } from "../components/select";
+import { IconButton } from "../components/icon-button";
 
 const LIST = "/app/email-templates";
 
@@ -430,6 +433,7 @@ export default function EmailTemplateEditor() {
             This template was not found. It may have been deleted.
           </p>
           <Link to={LIST} style={{ ...button("secondary", "md"), textDecoration: "none" }}>
+            <ArrowLeft aria-hidden size={15} strokeWidth={2} />
             Back to Email templates
           </Link>
         </s-section>
@@ -441,13 +445,15 @@ export default function EmailTemplateEditor() {
 
   return (
     <s-page heading={template ? "Edit email template" : "New email template"} inlineSize="large">
-      <style>{CSS}</style>
+      {/* A fixed string, set as HTML so the server and browser render it the same way. */}
+      <style dangerouslySetInnerHTML={{ __html: CSS }} />
 
       {/* ---------- top bar ---------- */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: space[5], flexWrap: "wrap", marginBottom: space[6] }}>
         <div style={{ display: "flex", alignItems: "center", gap: space[5], flexWrap: "wrap" }}>
           <Link to={LIST} style={{ ...button("tertiary", "sm"), textDecoration: "none" }}>
-            ← Email templates
+            <ArrowLeft aria-hidden size={15} strokeWidth={2} />
+            Email templates
           </Link>
           <span style={{ ...text.bodySm, color: dirty ? color.warningText : color.textSubtle }}>
             {saving ? "Saving…" : dirty ? "Unsaved changes" : template ? "All changes saved" : "Not saved yet"}
@@ -455,9 +461,7 @@ export default function EmailTemplateEditor() {
         </div>
         <div style={{ display: "flex", gap: space[3] }}>
           {template ? (
-            <button type="button" style={button("danger", "md")} onClick={() => setConfirmDelete(true)}>
-              Delete
-            </button>
+            <IconButton icon={Trash2} label="Delete template" variant="danger" onClick={() => setConfirmDelete(true)} />
           ) : null}
           {/* Reset: throw away unsaved edits and go back to the last
               saved version (or the starting template if never saved). */}
@@ -468,6 +472,7 @@ export default function EmailTemplateEditor() {
             title={dirty ? "Discard unsaved changes" : "No unsaved changes"}
             onClick={() => setConfirmResetAll(true)}
           >
+            <RotateCcw aria-hidden size={15} strokeWidth={2} />
             Reset
           </button>
           <button type="button" style={button("primary", "md", { disabled: saving })} disabled={saving} onClick={save}>
@@ -515,10 +520,10 @@ export default function EmailTemplateEditor() {
             <div className="mq-et-two">
               {textInput("name", "Template name")}
               <Field label="Status">
-                <select value={data.status} onChange={(e) => set("status", e.target.value === "active" ? "active" : "draft")} style={input()}>
+                <Select value={data.status} onChange={(e) => set("status", e.target.value === "active" ? "active" : "draft")} style={input()}>
                   <option value="draft">Draft</option>
                   <option value="active">Active</option>
-                </select>
+                </Select>
               </Field>
             </div>
           </Card>
@@ -556,6 +561,7 @@ export default function EmailTemplateEditor() {
                   </>
                 ) : (
                   <button type="button" style={button("tertiary", "sm")} onClick={() => setConfirmReset(true)}>
+                    <Wand2 aria-hidden size={15} strokeWidth={2} />
                     Rebuild from Design
                   </button>
                 )}
@@ -678,10 +684,10 @@ export default function EmailTemplateEditor() {
 
           <Card title="Style">
             <Field label="Alignment" hint={gone("alignment") ? GONE_HINT : undefined}>
-              <select disabled={gone("alignment")} value={data.alignment} onChange={(e) => set("alignment", e.target.value === "left" ? "left" : "center")} style={input()}>
+              <Select disabled={gone("alignment")} value={data.alignment} onChange={(e) => set("alignment", e.target.value === "left" ? "left" : "center")} style={input()}>
                 <option value="center">Center</option>
                 <option value="left">Left</option>
-              </select>
+              </Select>
             </Field>
             <div className="mq-et-two">
               {colorInput("buttonColor", "Button color")}
